@@ -334,6 +334,7 @@
     const joinMediaBtn = document.getElementById('joinMediaBtn');
     const leaveMediaBtn = document.getElementById('leaveMediaBtn');
     const mediaRoomStatus = document.getElementById('mediaRoomStatus');
+    const connectionStatus = document.getElementById('connectionStatus');
     const mediaParticipants = document.getElementById('mediaParticipants');
     const youtubeUrl = document.getElementById('youtubeUrl');
     const loadYoutubeBtn = document.getElementById('loadYoutubeBtn');
@@ -381,6 +382,34 @@
     const mediaRoomUsers = new Map();
     const SYNC_THRESHOLD = 2; // Sync if difference is more than 2 seconds
 
+    // Update header connection status
+    function updateConnectionStatus(status) {
+      const indicator = connectionStatus.querySelector('.h-3');
+      const text = connectionStatus.querySelector('span:last-child');
+      
+      indicator.className = 'h-3 w-3 rounded-full mr-2 ' +
+        (status === 'connected' ? 'bg-green-500' : 
+         status === 'connecting' ? 'bg-yellow-500 pulse-connecting' : 'bg-red-500');
+      
+      text.textContent = 
+        status === 'connected' ? `Connected to ${currentMediaRoom}` :
+        status === 'connecting' ? 'Connecting...' : 'Not connected';
+    }
+
+    // Update media room status
+    function updateMediaRoomStatus(status) {
+      const indicator = mediaRoomStatus.querySelector('.h-3');
+      const text = mediaRoomStatus.querySelector('span:last-child');
+      
+      indicator.className = 'h-3 w-3 rounded-full mr-2 ' +
+        (status === 'connected' ? 'bg-green-500' : 
+         status === 'connecting' ? 'bg-yellow-500 pulse-connecting' : 'bg-red-500');
+      
+      text.textContent = 
+        status === 'connected' ? `Connected to ${currentMediaRoom} (${isMediaHost ? 'Host' : 'Participant'})` :
+        status === 'connecting' ? 'Connecting to media room...' : 'Not connected to media room';
+    }
+
     // Media Source Tab Switching
     mediaSourceTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -397,20 +426,6 @@
         document.getElementById(`${source}-source`).classList.add('active');
       });
     });
-
-    // Update connection status
-    function updateMediaRoomStatus(status) {
-      const indicator = mediaRoomStatus.querySelector('.h-3');
-      const text = mediaRoomStatus.querySelector('span:last-child');
-      
-      indicator.className = 'h-3 w-3 rounded-full mr-2 ' +
-        (status === 'connected' ? 'bg-green-500' : 
-         status === 'connecting' ? 'bg-yellow-500 pulse-connecting' : 'bg-red-500');
-      
-      text.textContent = 
-        status === 'connected' ? `Connected to ${currentMediaRoom} (${isMediaHost ? 'Host' : 'Participant'})` :
-        status === 'connecting' ? 'Connecting to media room...' : 'Not connected to media room';
-    }
 
     // Media Room Connection
     joinMediaBtn.addEventListener('click', () => {
@@ -431,6 +446,7 @@
       leaveMediaBtn.disabled = false;
       
       updateMediaRoomStatus('connecting');
+      updateConnectionStatus('connecting');
     });
 
     leaveMediaBtn.addEventListener('click', () => {
@@ -483,6 +499,7 @@
       leaveMediaBtn.disabled = true;
       
       updateMediaRoomStatus('disconnected');
+      updateConnectionStatus('disconnected');
       currentMediaRoom = null;
       isMediaHost = false;
       mediaRoomUsers.clear();
@@ -561,9 +578,49 @@
       });
     }
 
+    // Add this function to handle room state
+    function handleRoomState(mediaState) {
+      if (!mediaState) {
+        console.log('No media state available in room');
+        return;
+      }
+      
+      console.log('Loading room media state:', mediaState);
+      
+      // Load the appropriate media based on state
+      switch (mediaState.type) {
+        case 'load-youtube':
+          if (mediaState.videoId) {
+            loadYouTubeVideo(mediaState.videoId, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's YouTube video`, 'incoming');
+          }
+          break;
+          
+        case 'load-direct-url':
+          if (mediaState.url) {
+            loadDirectUrlVideo(mediaState.url, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's video URL`, 'incoming');
+          }
+          break;
+          
+        case 'load-embed':
+          if (mediaState.platform && mediaState.videoId) {
+            loadEmbedVideo(mediaState.platform, mediaState.videoId, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's embedded video`, 'incoming');
+          }
+          break;
+          
+        case 'load-local-file':
+          if (mediaState.fileName) {
+            addMediaChatMessage('System', `Host is playing: ${mediaState.fileName}. Please load the same file to sync.`, 'incoming');
+          }
+          break;
+      }
+    }
+
     // Socket event handlers
-    socket.on('media-room-joined', (users, hostId) => {
-      console.log('Media room joined, users:', users);
+    socket.on('media-room-joined', (users, hostId, mediaState) => {
+      console.log('Media room joined, users:', users, 'Media state:', mediaState);
       
       users.forEach(user => {
         mediaRoomUsers.set(user.id, user);
@@ -571,6 +628,7 @@
       
       isMediaHost = hostId === socket.id;
       updateMediaRoomStatus('connected');
+      updateConnectionStatus('connected');
       updateMediaParticipants();
       
       // Enable media controls
@@ -578,12 +636,26 @@
         btn.disabled = false;
       });
       
+      // Handle existing media state if this is a new joiner
+      if (mediaState && !isMediaHost) {
+        setTimeout(() => {
+          handleRoomState(mediaState);
+        }, 1000);
+      }
+      
       if (isMediaHost) {
         becomeHostBtn.disabled = true;
         addMediaChatMessage('System', 'You are the media host. You can control playback for everyone.', 'incoming');
       } else {
         becomeHostBtn.disabled = false;
         addMediaChatMessage('System', `Connected to media room. ${mediaRoomUsers.get(hostId)?.displayName || 'Someone'} is the host.`, 'incoming');
+      }
+    });
+
+    // Add this new event handler for manual state requests
+    socket.on('room-state', (data) => {
+      if (data.room === currentMediaRoom) {
+        handleRoomState(data.mediaState);
       }
     });
 
@@ -691,6 +763,7 @@
         socket.emit('media-control', {
           room: currentMediaRoom,
           type: 'load-youtube',
+          mediaType: 'youtube',
           videoId: videoId,
           startTime: startTime
         });
@@ -812,6 +885,7 @@
         socket.emit('media-control', {
           room: currentMediaRoom,
           type: 'load-direct-url',
+          mediaType: 'direct-url',
           url: url,
           startTime: startTime
         });
@@ -840,87 +914,76 @@
             // Try different versions - test which one works best
             embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&autoplay=1&mute=0`;
             // Alternative: embedUrl = `https://geo.dailymotion.com/embed/video/${videoId}?autoplay=1`;
-            // Alternative: embedUrl = `https://www.dailymotion.com/player.html?video=${videoId}&autoplay=1`;
-            displayName = `Dailymotion video`;
+            // Alternative: embedUrl = `https://www.dailymotion.com/player/metadata/video/${videoId}`;
+            displayName = 'Dailymotion';
             break;
         case 'vimeo':
             embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
-            displayName = `Vimeo video`;
+            displayName = 'Vimeo';
             break;
         case 'other':
             embedUrl = videoId;
-            displayName = `Embedded video`;
+            displayName = 'Embedded';
             break;
     }
     
-    embedPlayer.innerHTML = `
-        <iframe 
-            src="${embedUrl}" 
-            frameborder="0" 
-            allow="autoplay; fullscreen; picture-in-picture" 
-            allowfullscreen
-            class="w-full h-full">
-        </iframe>
-    `;      
-      currentMediaType = 'embed';
-      enableMediaControls();
-      addMediaChatMessage('System', `Loaded ${displayName}`, 'incoming');
-      
-      if (isMediaHost && currentMediaRoom) {
+    embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+    currentMediaType = 'embed';
+    enableMediaControls();
+    addMediaChatMessage('System', `Loaded ${displayName} video`, 'incoming');
+    
+    if (isMediaHost && currentMediaRoom) {
         socket.emit('media-control', {
-          room: currentMediaRoom,
-          type: 'load-embed',
-          platform: platform,
-          videoId: videoId
+        room: currentMediaRoom,
+        type: 'load-embed',
+        mediaType: 'embed',
+        platform: platform,
+        videoId: videoId,
+        startTime: startTime
         });
-      }
+    }
     }
 
-    // Local file handling
-    localFileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const fileType = file.type;
-      const isVideo = fileType.startsWith('video/');
-      const isAudio = fileType.startsWith('audio/');
-      
-      if (!isVideo && !isAudio) {
-        alert('Please select a video or audio file');
-        return;
-      }
-      
-      playLocalBtn.disabled = false;
+    // Local File Handling
+    localFileInput.addEventListener('change', () => {
+      playLocalBtn.disabled = !localFileInput.files.length;
     });
 
     playLocalBtn.addEventListener('click', () => {
-      const file = localFileInput.files[0];
-      if (!file) return;
+      if (!localFileInput.files.length) {
+        alert('Please select a file first');
+        return;
+      }
       
-      const fileURL = URL.createObjectURL(file);
-      const fileType = file.type;
-      const isVideo = fileType.startsWith('video/');
+      const file = localFileInput.files[0];
+      const url = URL.createObjectURL(file);
+      
+      loadLocalFile(url, file.name);
+    });
+
+    function loadLocalFile(url, fileName, startTime = 0) {
+      if (localMediaPlayer) {
+        localMediaPlayer.pause();
+        localMediaPlayer = null;
+      }
       
       localFilePlayer.innerHTML = '';
       
-      if (isVideo) {
-        localMediaPlayer = document.createElement('video');
-        localMediaPlayer.controls = true;
-        localMediaPlayer.className = 'w-full h-full object-contain';
-        localMediaPlayer.preload = 'auto';
-        localFileFullscreen.classList.remove('hidden');
-      } else {
-        localMediaPlayer = document.createElement('audio');
-        localMediaPlayer.controls = true;
-        localMediaPlayer.className = 'w-full';
-      }
+      localMediaPlayer = document.createElement('video');
+      localMediaPlayer.controls = true;
+      localMediaPlayer.className = 'w-full h-full object-contain';
+      localMediaPlayer.src = url;
       
-      localMediaPlayer.src = fileURL;
       localFilePlayer.appendChild(localMediaPlayer);
+      localFileFullscreen.classList.remove('hidden');
       
       localMediaPlayer.addEventListener('loadedmetadata', () => {
         duration.textContent = formatTime(localMediaPlayer.duration);
         enableMediaControls();
+        
+        if (startTime > 0) {
+          localMediaPlayer.currentTime = startTime;
+        }
       });
       
       localMediaPlayer.addEventListener('timeupdate', () => {
@@ -951,37 +1014,22 @@
         }
       });
       
-      currentMediaType = 'local';
+      currentMediaType = 'local-file';
       enableMediaControls();
-      addMediaChatMessage('System', `Loaded local file: ${file.name}`, 'incoming');
+      addMediaChatMessage('System', `Loaded local file: ${fileName}`, 'incoming');
       
       if (isMediaHost && currentMediaRoom) {
         socket.emit('media-control', {
           room: currentMediaRoom,
           type: 'load-local-file',
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type
+          mediaType: 'local-file',
+          fileName: fileName,
+          startTime: startTime
         });
       }
-    });
+    }
 
-    // Fullscreen functionality
-    directUrlFullscreen.addEventListener('click', () => {
-      const container = directUrlPlayer.closest('.media-player-container');
-      if (container.requestFullscreen) {
-        container.requestFullscreen();
-      }
-    });
-
-    localFileFullscreen.addEventListener('click', () => {
-      const container = localFilePlayer.closest('.media-player-container');
-      if (container.requestFullscreen) {
-        container.requestFullscreen();
-      }
-    });
-
-    // Media control functions
+    // Media Controls
     function enableMediaControls() {
       [playMediaBtn, pauseMediaBtn, stopMediaBtn, syncMediaBtn].forEach(btn => {
         btn.disabled = false;
@@ -989,150 +1037,268 @@
       mediaProgress.disabled = false;
     }
 
-    function playMedia() {
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        youtubePlayerObj.playVideo();
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        directUrlMediaPlayer.play();
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        localMediaPlayer.play();
-      }
-    }
-
-    function pauseMedia() {
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        youtubePlayerObj.pauseVideo();
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        directUrlMediaPlayer.pause();
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        localMediaPlayer.pause();
-      }
-    }
-
-    function stopMedia() {
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        youtubePlayerObj.stopVideo();
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        directUrlMediaPlayer.pause();
-        directUrlMediaPlayer.currentTime = 0;
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        localMediaPlayer.pause();
-        localMediaPlayer.currentTime = 0;
-      }
-    }
-
-    function seekMedia(time) {
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        youtubePlayerObj.seekTo(time, true);
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        directUrlMediaPlayer.currentTime = time;
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        localMediaPlayer.currentTime = time;
-      }
-    }
-
     playMediaBtn.addEventListener('click', () => {
-      if (isMediaHost && currentMediaRoom) {
-        socket.emit('media-control', {
-          room: currentMediaRoom,
-          type: 'play'
-        });
-      }
       playMedia();
     });
 
     pauseMediaBtn.addEventListener('click', () => {
-      if (isMediaHost && currentMediaRoom) {
-        socket.emit('media-control', {
-          room: currentMediaRoom,
-          type: 'pause'
-        });
-      }
       pauseMedia();
     });
 
     stopMediaBtn.addEventListener('click', () => {
-      if (isMediaHost && currentMediaRoom) {
-        socket.emit('media-control', {
-          room: currentMediaRoom,
-          type: 'stop'
-        });
-      }
       stopMedia();
     });
 
-    mediaProgress.addEventListener('input', () => {
-      if (!isMediaHost) return;
-      
-      const progress = mediaProgress.value;
-      let newTime;
-      
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        const totalDuration = youtubePlayerObj.getDuration();
-        newTime = (progress / 100) * totalDuration;
-        youtubePlayerObj.seekTo(newTime, true);
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        newTime = (progress / 100) * directUrlMediaPlayer.duration;
-        directUrlMediaPlayer.currentTime = newTime;
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        newTime = (progress / 100) * localMediaPlayer.duration;
-        localMediaPlayer.currentTime = newTime;
-      }
-      
-      if (newTime !== undefined && currentMediaRoom) {
-        socket.emit('media-control', {
-          room: currentMediaRoom,
-          type: 'seek',
-          time: newTime
-        });
+    // Update the sync button to also request room state
+    syncMediaBtn.addEventListener('click', () => {
+      if (currentMediaRoom) {
+        socket.emit('get-room-state', currentMediaRoom);
+        addMediaChatMessage('System', 'Requesting current media state from room...', 'incoming');
       }
     });
 
-    // Become Host
     becomeHostBtn.addEventListener('click', () => {
-      if (!currentMediaRoom) return;
-      
-      socket.emit('media-become-host', currentMediaRoom);
-      becomeHostBtn.disabled = true;
+      socket.emit('request-host', currentMediaRoom);
     });
 
-    // Improved media sync functionality
+    function playMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.playVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.play();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.play();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+      }
+    }
+
+    function pauseMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.pauseVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.pause();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.pause();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+      }
+    }
+
+    function stopMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.stopVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.pause();
+            directUrlMediaPlayer.currentTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.pause();
+            localMediaPlayer.currentTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+      }
+    }
+
+    function syncWithHost() {
+      socket.emit('request-sync', currentMediaRoom);
+    }
+
+    // Media Progress Control
+    mediaProgress.addEventListener('input', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            const newTime = (progress / 100) * duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            const newTime = (progress / 100) * directUrlMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            const newTime = (progress / 100) * localMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+      }
+    });
+
+    mediaProgress.addEventListener('change', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            const newTime = (progress / 100) * duration;
+            youtubePlayerObj.seekTo(newTime, true);
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            const newTime = (progress / 100) * directUrlMediaPlayer.duration;
+            directUrlMediaPlayer.currentTime = newTime;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            const newTime = (progress / 100) * localMediaPlayer.duration;
+            localMediaPlayer.currentTime = newTime;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+      }
+    });
+
+    // Media Sync
     function startMediaSync() {
       if (mediaSyncInterval) {
         clearInterval(mediaSyncInterval);
       }
       
       mediaSyncInterval = setInterval(() => {
-        if (isMediaHost) {
-          let state, time, totalDuration;
+        if (isMediaHost && currentMediaRoom) {
+          let currentTime = 0;
           
-          if (currentMediaType === 'youtube' && youtubePlayerObj) {
-            state = youtubePlayerObj.getPlayerState();
-            time = youtubePlayerObj.getCurrentTime();
-            totalDuration = youtubePlayerObj.getDuration();
-          } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-            state = directUrlMediaPlayer.paused ? 2 : 1;
-            time = directUrlMediaPlayer.currentTime;
-            totalDuration = directUrlMediaPlayer.duration;
-          } else if (currentMediaType === 'local' && localMediaPlayer) {
-            state = localMediaPlayer.paused ? 2 : 1;
-            time = localMediaPlayer.currentTime;
-            totalDuration = localMediaPlayer.duration;
+          switch (currentMediaType) {
+            case 'youtube':
+              if (youtubePlayerObj) {
+                currentTime = youtubePlayerObj.getCurrentTime();
+              }
+              break;
+            case 'direct-url':
+              if (directUrlMediaPlayer) {
+                currentTime = directUrlMediaPlayer.currentTime;
+              }
+              break;
+            case 'local-file':
+              if (localMediaPlayer) {
+                currentTime = localMediaPlayer.currentTime;
+              }
+              break;
           }
           
-          if (state !== undefined && time !== undefined) {
-            socket.emit('media-control', {
-              room: currentMediaRoom,
-              type: 'sync',
-              mediaType: currentMediaType,
-              state: state,
-              time: time,
-              duration: totalDuration,
-              timestamp: Date.now() // Add timestamp for better sync
-            });
-          }
+          socket.emit('media-sync', {
+            room: currentMediaRoom,
+            time: currentTime,
+            timestamp: Date.now()
+          });
         }
-      }, 500); // Increased sync frequency for better accuracy
+      }, 1000);
     }
 
     function stopMediaSync() {
@@ -1142,119 +1308,187 @@
       }
     }
 
-    // Handle incoming media controls with improved sync
+    // Socket event handlers for media controls
     socket.on('media-control', (data) => {
-      if (data.room !== currentMediaRoom || data.from === socket.id) return;
-      
       console.log('Received media control:', data);
       
-      // Improved sync with timestamp checking
-      const now = Date.now();
-      if (data.timestamp && (now - data.timestamp) > 1000) {
-        console.log('Ignoring stale sync data');
-        return;
-      }
-      
-      if (data.type === 'play') {
+      if (data.type === 'load-youtube') {
+        loadYouTubeVideo(data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-direct-url') {
+        loadDirectUrlVideo(data.url, data.startTime || 0);
+      } else if (data.type === 'load-embed') {
+        loadEmbedVideo(data.platform, data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-local-file') {
+        addMediaChatMessage('System', `Host loaded local file: ${data.fileName}. You need to load the same file manually.`, 'incoming');
+      } else if (data.type === 'play') {
         playMedia();
       } else if (data.type === 'pause') {
         pauseMedia();
       } else if (data.type === 'stop') {
         stopMedia();
       } else if (data.type === 'seek') {
-        // Improved seeking with threshold
-        const currentTime = getCurrentTime();
-        if (Math.abs(currentTime - data.time) > SYNC_THRESHOLD) {
-          seekMedia(data.time);
-        }
-      } else if (data.type === 'load-youtube') {
-        loadYouTubeVideo(data.videoId, data.startTime);
-      } else if (data.type === 'load-direct-url') {
-        loadDirectUrlVideo(data.url, data.startTime);
-      } else if (data.type === 'load-embed') {
-        loadEmbedVideo(data.platform, data.videoId);
-      } else if (data.type === 'load-local-file') {
-        addMediaChatMessage('System', `Host is playing local file: ${data.fileName}. Please load the same file to sync.`, 'incoming');
-      } else if (data.type === 'sync') {
-        // Improved sync handling
-        handleSync(data);
+        seekMedia(data.time);
       }
     });
 
-    function getCurrentTime() {
-      if (currentMediaType === 'youtube' && youtubePlayerObj) {
-        return youtubePlayerObj.getCurrentTime();
-      } else if (currentMediaType === 'direct-url' && directUrlMediaPlayer) {
-        return directUrlMediaPlayer.currentTime;
-      } else if (currentMediaType === 'local' && localMediaPlayer) {
-        return localMediaPlayer.currentTime;
+    socket.on('media-sync', (data) => {
+      if (!isMediaHost) {
+        syncMediaTime(data.time, data.timestamp);
       }
-      return 0;
+    });
+
+    socket.on('media-sync-request', (data) => {
+      if (isMediaHost) {
+        let currentTime = 0;
+        
+        switch (currentMediaType) {
+          case 'youtube':
+            if (youtubePlayerObj) {
+              currentTime = youtubePlayerObj.getCurrentTime();
+            }
+            break;
+          case 'direct-url':
+            if (directUrlMediaPlayer) {
+              currentTime = directUrlMediaPlayer.currentTime;
+            }
+            break;
+          case 'local-file':
+            if (localMediaPlayer) {
+              currentTime = localMediaPlayer.currentTime;
+            }
+            break;
+        }
+        
+        socket.emit('media-sync', {
+          room: currentMediaRoom,
+          time: currentTime,
+          timestamp: Date.now()
+        });
+      }
+    });
+
+    function seekMedia(time) {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.seekTo(time, true);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.currentTime = time;
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.currentTime = time;
+          }
+          break;
+      }
     }
 
-    function handleSync(data) {
-      const currentTime = getCurrentTime();
-      const timeDiff = Math.abs(currentTime - data.time);
+    function syncMediaTime(time, timestamp) {
+      const now = Date.now();
+      const latency = (now - timestamp) / 1000;
+      const adjustedTime = time + latency;
       
-      // Only sync if difference is significant
-      if (timeDiff > SYNC_THRESHOLD) {
-        seekMedia(data.time);
-      }
-      
-      // Sync play/pause state
-      if (data.state === 1) { // Playing
-        if ((currentMediaType === 'direct-url' && directUrlMediaPlayer && directUrlMediaPlayer.paused) ||
-            (currentMediaType === 'local' && localMediaPlayer && localMediaPlayer.paused)) {
-          playMedia();
-        }
-      } else if (data.state === 2) { // Paused
-        if ((currentMediaType === 'direct-url' && directUrlMediaPlayer && !directUrlMediaPlayer.paused) ||
-            (currentMediaType === 'local' && localMediaPlayer && !localMediaPlayer.paused)) {
-          pauseMedia();
-        }
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const currentTime = youtubePlayerObj.getCurrentTime();
+            if (Math.abs(currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              youtubePlayerObj.seekTo(adjustedTime, true);
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            if (Math.abs(directUrlMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              directUrlMediaPlayer.currentTime = adjustedTime;
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            if (Math.abs(localMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              localMediaPlayer.currentTime = adjustedTime;
+            }
+          }
+          break;
       }
     }
 
-    // Media chat functionality
+    // Chat functionality
+    sendMediaChatBtn.addEventListener('click', sendMediaChatMessage);
+
+    mediaChatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMediaChatMessage();
+      }
+    });
+
     function sendMediaChatMessage() {
       const message = mediaChatInput.value.trim();
       if (!message || !currentMediaRoom) return;
       
-      addMediaChatMessage(mediaDisplayNameValue, message, 'outgoing');
       socket.emit('media-chat-message', {
         room: currentMediaRoom,
         message: message,
-        userName: mediaDisplayNameValue
+        sender: mediaDisplayNameValue
       });
+      
+      addMediaChatMessage(mediaDisplayNameValue, message, 'outgoing');
       mediaChatInput.value = '';
     }
 
-    function addMediaChatMessage(user, message, type = 'incoming') {
-      const messageElement = document.createElement('div');
-      messageElement.className = `mb-3 ${type === 'outgoing' ? 'text-right' : ''}`;
-      messageElement.innerHTML = `
-        <div class="inline-block p-3 rounded-lg max-w-xs ${
-          type === 'outgoing' ? 'bg-blue-600 text-white' : 'bg-gray-600 text-white'
+    function addMediaChatMessage(sender, message, type) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `mb-3 ${type === 'outgoing' ? 'text-right' : ''}`;
+      
+      messageDiv.innerHTML = `
+        <div class="inline-block max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-4 py-2 rounded-lg ${
+          type === 'outgoing' 
+            ? 'bg-blue-600 text-white' 
+            : 'bg-gray-600 text-white'
         }">
-          <div class="text-xs font-semibold mb-1 ${
-            type === 'outgoing' ? 'text-blue-200' : 'text-gray-400'
-          }">${user}</div>
-          <div class="text-sm">${message}</div>
+          <div class="font-semibold text-sm ${
+            type === 'outgoing' ? 'text-blue-200' : 'text-gray-300'
+          }">${sender}</div>
+          <div class="mt-1">${message}</div>
         </div>
       `;
-      const placeholder = mediaChatMessages.querySelector('.text-center');
-      if (placeholder) placeholder.remove();
-      mediaChatMessages.appendChild(messageElement);
+      
+      mediaChatMessages.appendChild(messageDiv);
       mediaChatMessages.scrollTop = mediaChatMessages.scrollHeight;
     }
 
-    sendMediaChatBtn.addEventListener('click', sendMediaChatMessage);
-    mediaChatInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendMediaChatMessage();
+    socket.on('media-chat-message', (data) => {
+      addMediaChatMessage(data.sender, data.message, 'incoming');
     });
 
-    socket.on('media-chat-message', (data) => {
-      addMediaChatMessage(data.userName || `User ${data.userId.substring(0, 6)}`, data.message, 'incoming');
+    // Fullscreen functionality
+    directUrlFullscreen.addEventListener('click', () => {
+      if (directUrlPlayer) {
+        if (directUrlPlayer.requestFullscreen) {
+          directUrlPlayer.requestFullscreen();
+        } else if (directUrlPlayer.webkitRequestFullscreen) {
+          directUrlPlayer.webkitRequestFullscreen();
+        } else if (directUrlPlayer.msRequestFullscreen) {
+          directUrlPlayer.msRequestFullscreen();
+        }
+      }
+    });
+
+    localFileFullscreen.addEventListener('click', () => {
+      if (localFilePlayer) {
+        if (localFilePlayer.requestFullscreen) {
+          localFilePlayer.requestFullscreen();
+        } else if (localFilePlayer.webkitRequestFullscreen) {
+          localFilePlayer.webkitRequestFullscreen();
+        } else if (localFilePlayer.msRequestFullscreen) {
+          localFilePlayer.msRequestFullscreen();
+        }
+      }
     });
 
     // Utility functions
@@ -1267,10 +1501,14 @@
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      console.log('Family Media Sharing initialized');
+    function initialize() {
+      disableAllControls();
       updateMediaRoomStatus('disconnected');
-    });
+      updateConnectionStatus('disconnected');
+    }
+
+    // Start the application
+    initialize();
   </script>
 </body>
 </html>
