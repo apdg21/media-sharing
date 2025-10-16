@@ -1,180 +1,132 @@
-const express = require('express');
-const app = express();
-const http = require('http');
-const server = http.createServer(app);
-const { Server } = require('socket.io');
-
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
-});
-
-app.use(express.static(__dirname));
-
-app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
-app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
-
-const mediaRooms = new Map();
-
-io.on('connection', (socket) => {
-  console.log('✅ User connected:', socket.id);
-
-  socket.on('join-media-room', (roomName, displayName) => {
-    try {
-      console.log(`🎬 ${socket.id} joining media room ${roomName} as ${displayName}`);
-      
-      // Leave any other media rooms
-      for (const r of socket.rooms) {
-        if (r.startsWith('media-')) socket.leave(r);
+// Add this function to handle room state
+function handleRoomState(mediaState) {
+  if (!mediaState) {
+    console.log('No media state available in room');
+    return;
+  }
+  
+  console.log('Loading room media state:', mediaState);
+  
+  // Load the appropriate media based on state
+  switch (mediaState.type) {
+    case 'load-youtube':
+      if (mediaState.videoId) {
+        loadYouTubeVideo(mediaState.videoId, mediaState.startTime || 0);
+        addMediaChatMessage('System', `Synced to host's YouTube video`, 'incoming');
       }
+      break;
       
-      const mediaRoomId = `media-${roomName}`;
-      socket.join(mediaRoomId);
-      
-      if (!mediaRooms.has(mediaRoomId)) {
-        mediaRooms.set(mediaRoomId, new Map());
-        console.log(`🎯 Created new media room: ${roomName}`);
+    case 'load-direct-url':
+      if (mediaState.url) {
+        loadDirectUrlVideo(mediaState.url, mediaState.startTime || 0);
+        addMediaChatMessage('System', `Synced to host's video URL`, 'incoming');
       }
+      break;
       
-      const mediaRoom = mediaRooms.get(mediaRoomId);
-      const isFirstUser = mediaRoom.size === 0;
-      
-      mediaRoom.set(socket.id, {
-        id: socket.id,
-        displayName: displayName || `User${socket.id.substring(0, 6)}`,
-        isHost: isFirstUser
-      });
-      
-      console.log(`📊 Media room ${roomName} has ${mediaRoom.size} users`);
-      
-      const users = Array.from(mediaRoom.values());
-      const hostId = isFirstUser ? socket.id : Array.from(mediaRoom.values()).find(user => user.isHost)?.id;
-      
-      // Send current users to the joining user
-      socket.emit('media-room-joined', users, hostId);
-      
-      // Notify other users in the media room
-      socket.to(mediaRoomId).emit('media-user-connected', {
-        id: socket.id,
-        displayName: displayName || `User${socket.id.substring(0, 6)}`,
-        isHost: isFirstUser
-      });
-      
-    } catch (err) {
-      console.error('❌ Error join-media-room:', err);
-      socket.emit('error', { message: 'Failed to join media room' });
-    }
-  });
-
-  socket.on('leave-media-room', (roomName) => {
-    handleMediaUserLeave(roomName, socket.id);
-  });
-
-  socket.on('media-become-host', (roomName) => {
-    const mediaRoomId = `media-${roomName}`;
-    if (!mediaRooms.has(mediaRoomId)) return;
-    
-    const mediaRoom = mediaRooms.get(mediaRoomId);
-    if (mediaRoom.has(socket.id)) {
-      // Remove host from current host
-      mediaRoom.forEach((user, userId) => {
-        user.isHost = userId === socket.id;
-      });
-      
-      // Notify all users in the media room
-      io.to(mediaRoomId).emit('media-host-changed', socket.id);
-      console.log(`👑 ${socket.id} became host in media room ${roomName}`);
-    }
-  });
-
-  socket.on('media-control', (data) => {
-    const mediaRoomId = `media-${data.room}`;
-    if (!mediaRooms.has(mediaRoomId)) {
-      console.warn(`Media control for non-existent room: ${data.room}`);
-      return;
-    }
-    
-    const mediaRoom = mediaRooms.get(mediaRoomId);
-    const user = mediaRoom.get(socket.id);
-    
-    // Only allow hosts to control media
-    if (user && user.isHost) {
-      console.log(`🎮 Media control from host ${socket.id} in room ${data.room}:`, data.type);
-      
-      // Add timestamp for sync
-      data.timestamp = Date.now();
-      
-      // Broadcast media control to all other users in the media room
-      socket.to(mediaRoomId).emit('media-control', {
-        ...data,
-        from: socket.id
-      });
-    } else {
-      console.warn(`❌ Non-host ${socket.id} attempted media control in room ${data.room}`);
-    }
-  });
-
-  socket.on('media-chat-message', (data) => {
-    const mediaRoomId = `media-${data.room}`;
-    if (!mediaRooms.has(mediaRoomId)) {
-      console.warn(`Media chat for non-existent room: ${data.room}`);
-      return;
-    }
-    
-    console.log(`💬 Media chat from ${socket.id} in room ${data.room}`);
-    
-    // Broadcast media chat message to all other users in the media room
-    socket.to(mediaRoomId).emit('media-chat-message', {
-      message: data.message,
-      userId: socket.id,
-      userName: data.userName
-    });
-  });
-
-  socket.on('disconnect', () => {
-    console.log('❌ User disconnected:', socket.id);
-    
-    // Handle media room cleanup
-    mediaRooms.forEach((users, mediaRoomId) => {
-      if (users.has(socket.id)) {
-        const roomName = mediaRoomId.replace('media-', '');
-        handleMediaUserLeave(roomName, socket.id);
+    case 'load-embed':
+      if (mediaState.platform && mediaState.videoId) {
+        loadEmbedVideo(mediaState.platform, mediaState.videoId, mediaState.startTime || 0);
+        addMediaChatMessage('System', `Synced to host's embedded video`, 'incoming');
       }
-    });
-  });
+      break;
+      
+    case 'load-local-file':
+      if (mediaState.fileName) {
+        addMediaChatMessage('System', `Host is playing: ${mediaState.fileName}. Please load the same file to sync.`, 'incoming');
+      }
+      break;
+  }
+}
 
-  function handleMediaUserLeave(roomName, userId) {
-    const mediaRoomId = `media-${roomName}`;
-    if (!mediaRooms.has(mediaRoomId)) return;
-    
-    const mediaRoom = mediaRooms.get(mediaRoomId);
-    if (mediaRoom.has(userId)) {
-      const user = mediaRoom.get(userId);
-      const wasHost = user.isHost;
-      
-      mediaRoom.delete(userId);
-      console.log(`⬅️ ${userId} (${user.displayName}) left media room ${roomName}`);
-      
-      // Notify other users
-      socket.to(mediaRoomId).emit('media-user-disconnected', userId);
-      
-      // If host left and there are other users, assign new host
-      if (wasHost && mediaRoom.size > 0) {
-        const newHost = Array.from(mediaRoom.values())[0];
-        newHost.isHost = true;
-        
-        io.to(mediaRoomId).emit('media-host-changed', newHost.id);
-        console.log(`👑 ${newHost.id} (${newHost.displayName}) became new host in media room ${roomName}`);
-      }
-      
-      if (mediaRoom.size === 0) {
-        mediaRooms.delete(mediaRoomId);
-        console.log(`🗑️ Media room ${roomName} deleted (empty)`);
-      }
-    }
+// Update the media-room-joined event handler
+socket.on('media-room-joined', (users, hostId, mediaState) => {
+  console.log('Media room joined, users:', users, 'Media state:', mediaState);
+  
+  users.forEach(user => {
+    mediaRoomUsers.set(user.id, user);
+  });
+  
+  isMediaHost = hostId === socket.id;
+  updateMediaRoomStatus('connected');
+  updateConnectionStatus('connected');
+  updateMediaParticipants();
+  
+  // Enable media controls
+  [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+    btn.disabled = false;
+  });
+  
+  // Handle existing media state if this is a new joiner
+  if (mediaState && !isMediaHost) {
+    setTimeout(() => {
+      handleRoomState(mediaState);
+    }, 1000);
+  }
+  
+  if (isMediaHost) {
+    becomeHostBtn.disabled = true;
+    addMediaChatMessage('System', 'You are the media host. You can control playback for everyone.', 'incoming');
+  } else {
+    becomeHostBtn.disabled = false;
+    addMediaChatMessage('System', `Connected to media room. ${mediaRoomUsers.get(hostId)?.displayName || 'Someone'} is the host.`, 'incoming');
   }
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Media Sharing Server running on port ${PORT}`);
+// Add this new event handler for manual state requests
+socket.on('room-state', (data) => {
+  if (data.room === currentMediaRoom) {
+    handleRoomState(data.mediaState);
+  }
 });
+
+// Update the sync button to also request room state
+syncMediaBtn.addEventListener('click', () => {
+  if (currentMediaRoom) {
+    socket.emit('get-room-state', currentMediaRoom);
+    addMediaChatMessage('System', 'Requesting current media state from room...', 'incoming');
+  }
+});
+
+// Update media control functions to include mediaType
+function playMedia() {
+  switch (currentMediaType) {
+    case 'youtube':
+      if (youtubePlayerObj) {
+        youtubePlayerObj.playVideo();
+        if (isMediaHost && currentMediaRoom) {
+          socket.emit('media-control', {
+            room: currentMediaRoom,
+            type: 'play',
+            mediaType: 'youtube'
+          });
+        }
+      }
+      break;
+    case 'direct-url':
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.play();
+        if (isMediaHost && currentMediaRoom) {
+          socket.emit('media-control', {
+            room: currentMediaRoom,
+            type: 'play',
+            mediaType: 'direct-url'
+          });
+        }
+      }
+      break;
+    case 'local-file':
+      if (localMediaPlayer) {
+        localMediaPlayer.play();
+        if (isMediaHost && currentMediaRoom) {
+          socket.emit('media-control', {
+            room: currentMediaRoom,
+            type: 'play',
+            mediaType: 'local-file'
+          });
+        }
+      }
+      break;
+  }
+}
+
+// Similarly update pauseMedia, stopMedia functions to include mediaType
