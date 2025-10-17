@@ -14,9 +14,18 @@ app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
 
 const mediaRooms = new Map();
-
-// Store room media state
 const roomMediaState = new Map();
+const roomPrivacy = new Map(); // Track room privacy
+
+// Generate easy-to-share room codes
+function generateRoomCode() {
+  const adjectives = ['Quick', 'Smart', 'Clear', 'Bright', 'Calm', 'Fast', 'Easy', 'Safe', 'Team', 'Work'];
+  const nouns = ['Team', 'Focus', 'Stream', 'Share', 'Sync', 'Meet', 'View', 'Cast', 'Room', 'Space'];
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const numbers = Math.floor(100 + Math.random() * 900);
+  return `${adj}${noun}${numbers}`;
+}
 
 io.on('connection', (socket) => {
   console.log('✅ User connected:', socket.id);
@@ -35,6 +44,12 @@ io.on('connection', (socket) => {
       
       if (!mediaRooms.has(mediaRoomId)) {
         mediaRooms.set(mediaRoomId, new Map());
+        // Mark as public if it's the default lobby
+        roomPrivacy.set(mediaRoomId, {
+          isPublic: roomName === 'public-lobby',
+          createdBy: socket.id,
+          createdAt: Date.now()
+        });
         console.log(`🎯 Created new media room: ${roomName}`);
       }
       
@@ -54,9 +69,10 @@ io.on('connection', (socket) => {
       
       // Get current media state for this room
       const currentMediaState = roomMediaState.get(mediaRoomId) || null;
+      const privacyInfo = roomPrivacy.get(mediaRoomId) || { isPublic: true };
       
       // Send current users AND media state to the joining user
-      socket.emit('media-room-joined', users, hostId, currentMediaState);
+      socket.emit('media-room-joined', users, hostId, currentMediaState, privacyInfo);
       
       // Notify other users in the media room
       socket.to(mediaRoomId).emit('media-user-connected', {
@@ -81,6 +97,48 @@ io.on('connection', (socket) => {
     } catch (err) {
       console.error('❌ Error join-media-room:', err);
       socket.emit('error', { message: 'Failed to join media room' });
+    }
+  });
+
+  socket.on('create-private-room', (displayName) => {
+    try {
+      const roomCode = generateRoomCode();
+      const mediaRoomId = `media-${roomCode}`;
+      
+      // Leave any current rooms
+      for (const r of socket.rooms) {
+        if (r.startsWith('media-')) socket.leave(r);
+      }
+      
+      // Create new private room
+      mediaRooms.set(mediaRoomId, new Map());
+      roomPrivacy.set(mediaRoomId, {
+        isPublic: false,
+        createdBy: socket.id,
+        createdAt: Date.now()
+      });
+      
+      socket.join(mediaRoomId);
+      
+      const mediaRoom = mediaRooms.get(mediaRoomId);
+      mediaRoom.set(socket.id, {
+        id: socket.id,
+        displayName: displayName || `User${socket.id.substring(0, 6)}`,
+        isHost: true
+      });
+      
+      console.log(`🔒 Private room created: ${roomCode} by ${socket.id}`);
+      
+      // Send success with room code
+      socket.emit('private-room-created', roomCode, [{
+        id: socket.id,
+        displayName: displayName || `User${socket.id.substring(0, 6)}`,
+        isHost: true
+      }]);
+      
+    } catch (err) {
+      console.error('❌ Error creating private room:', err);
+      socket.emit('error', { message: 'Failed to create private room' });
     }
   });
 
@@ -279,6 +337,7 @@ io.on('connection', (socket) => {
       if (mediaRoom.size === 0) {
         mediaRooms.delete(mediaRoomId);
         roomMediaState.delete(mediaRoomId);
+        roomPrivacy.delete(mediaRoomId);
         console.log(`🗑️ Media room ${roomName} deleted (empty)`);
       }
     }
