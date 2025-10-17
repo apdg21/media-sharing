@@ -121,6 +121,9 @@
           <button id="createPrivateRoomBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold">
             <i class="fas fa-lock mr-2"></i> Create Private Room
           </button>
+          <button id="joinPrivateRoomBtn" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg font-semibold">
+            <i class="fas fa-key mr-2"></i> Join Private Room
+          </button>
         </div>
 
         <!-- Public Room Section -->
@@ -140,11 +143,11 @@
           </div>
         </div>
 
-        <!-- Private Room Section -->
+        <!-- Private Room Creation Section -->
         <div id="privateRoomSection" class="hidden mb-4 p-4 bg-green-900/20 rounded-lg border border-green-500/30">
           <div class="flex items-center mb-2">
             <i class="fas fa-lock text-green-400 mr-2"></i>
-            <span class="text-green-300 font-semibold">Private Room - Only people with the code can join</span>
+            <span class="text-green-300 font-semibold">Create Private Room - Only people with the code can join</span>
           </div>
           <div class="flex flex-col md:flex-row gap-4 items-center">
             <input id="privateDisplayName" placeholder="Your name" value="User"
@@ -169,11 +172,28 @@
           </div>
         </div>
 
+        <!-- Private Room Join Section -->
+        <div id="joinPrivateRoomSection" class="hidden mb-4 p-4 bg-purple-900/20 rounded-lg border border-purple-500/30">
+          <div class="flex items-center mb-2">
+            <i class="fas fa-key text-purple-400 mr-2"></i>
+            <span class="text-purple-300 font-semibold">Join Private Room - Enter room code</span>
+          </div>
+          <div class="flex flex-col md:flex-row gap-4">
+            <input id="privateRoomCode" placeholder="Enter room code (e.g., QuickTeam123)" 
+                   class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <input id="privateJoinDisplayName" placeholder="Your name" value="User"
+                   class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <button id="joinPrivateRoomBtnAction" class="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg font-semibold">
+              <i class="fas fa-sign-in-alt mr-2"></i> Join Room
+            </button>
+          </div>
+        </div>
+
         <!-- Current Room Info -->
-        <div id="currentRoomInfo" class="hidden mb-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+        <div id="currentRoomInfo" class="hidden mb-4 p-3 bg-gray-800 rounded-lg border border-gray-600">
           <div class="flex justify-between items-center">
             <div>
-              <span class="text-purple-300 font-semibold" id="currentRoomName"></span>
+              <span class="text-white font-semibold" id="currentRoomName"></span>
               <span id="roomPrivacyBadge" class="ml-2 px-2 py-1 text-xs rounded-full"></span>
             </div>
             <button id="leaveMediaBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg font-semibold">
@@ -430,8 +450,10 @@
     // New DOM Elements for room management
     const joinPublicRoomBtn = document.getElementById('joinPublicRoomBtn');
     const createPrivateRoomBtn = document.getElementById('createPrivateRoomBtn');
+    const joinPrivateRoomBtn = document.getElementById('joinPrivateRoomBtn');
     const publicRoomSection = document.getElementById('publicRoomSection');
     const privateRoomSection = document.getElementById('privateRoomSection');
+    const joinPrivateRoomSection = document.getElementById('joinPrivateRoomSection');
     const privateDisplayName = document.getElementById('privateDisplayName');
     const createPrivateBtn = document.getElementById('createPrivateBtn');
     const privateRoomInfo = document.getElementById('privateRoomInfo');
@@ -440,6 +462,9 @@
     const currentRoomInfo = document.getElementById('currentRoomInfo');
     const currentRoomName = document.getElementById('currentRoomName');
     const roomPrivacyBadge = document.getElementById('roomPrivacyBadge');
+    const privateRoomCode = document.getElementById('privateRoomCode');
+    const privateJoinDisplayName = document.getElementById('privateJoinDisplayName');
+    const joinPrivateRoomBtnAction = document.getElementById('joinPrivateRoomBtnAction');
 
     // State variables
     let youtubePlayerObj = null;
@@ -486,12 +511,21 @@
     joinPublicRoomBtn.addEventListener('click', () => {
       publicRoomSection.classList.remove('hidden');
       privateRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
       privateRoomInfo.classList.add('hidden');
     });
 
     createPrivateRoomBtn.addEventListener('click', () => {
       privateRoomSection.classList.remove('hidden');
       publicRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
+    });
+
+    joinPrivateRoomBtn.addEventListener('click', () => {
+      joinPrivateRoomSection.classList.remove('hidden');
+      publicRoomSection.classList.add('hidden');
+      privateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
     });
 
     // Create private room
@@ -533,6 +567,30 @@
       addMediaChatMessage('System', 'Private room created! You are the host. Share the room code with colleagues.', 'incoming');
     });
 
+    // Join private room
+    joinPrivateRoomBtnAction.addEventListener('click', () => {
+      const roomCode = privateRoomCode.value.trim();
+      const displayName = privateJoinDisplayName.value.trim() || 'User';
+      
+      if (!roomCode) {
+        alert('Please enter a room code');
+        return;
+      }
+      
+      currentMediaRoom = roomCode;
+      mediaDisplayNameValue = displayName;
+      
+      socket.emit('join-media-room', roomCode, displayName);
+      
+      // Disable inputs while connecting
+      privateRoomCode.disabled = true;
+      privateJoinDisplayName.disabled = true;
+      joinPrivateRoomBtnAction.disabled = true;
+      
+      updateMediaRoomStatus('connecting');
+      updateConnectionStatus('connecting');
+    });
+
     // Copy room code
     copyRoomCode.addEventListener('click', () => {
       navigator.clipboard.writeText(roomCodeDisplay.textContent).then(() => {
@@ -542,6 +600,15 @@
           copyRoomCode.innerHTML = originalText;
         }, 2000);
       });
+    });
+
+    // Handle room errors
+    socket.on('room-error', (data) => {
+      alert(data.message);
+      // Re-enable inputs
+      privateRoomCode.disabled = false;
+      privateJoinDisplayName.disabled = false;
+      joinPrivateRoomBtnAction.disabled = false;
     });
 
     // Media Source Tab Switching
@@ -592,10 +659,16 @@
         socket.emit('leave-media-room', currentMediaRoom);
       }
       
+      // Re-enable private room inputs
+      privateRoomCode.disabled = false;
+      privateJoinDisplayName.disabled = false;
+      joinPrivateRoomBtnAction.disabled = false;
+      
       // Hide room info
       currentRoomInfo.classList.add('hidden');
       publicRoomSection.classList.remove('hidden');
       privateRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
       privateRoomInfo.classList.add('hidden');
       
       // Reset media state
@@ -1201,18 +1274,7 @@
       stopMedia();
     });
 
-    // Update the sync button to also request room state
-    syncMediaBtn.addEventListener('click', () => {
-      if (currentMediaRoom) {
-        socket.emit('get-room-state', currentMediaRoom);
-        addMediaChatMessage('System', 'Requesting current media state from room...', 'incoming');
-      }
-    });
-
-    becomeHostBtn.addEventListener('click', () => {
-      socket.emit('request-host', currentMediaRoom);
-    });
-
+    // Enhanced media control functions that work with embed videos
     function playMedia() {
       switch (currentMediaType) {
         case 'youtube':
@@ -1249,6 +1311,18 @@
                 mediaType: 'local-file'
               });
             }
+          }
+          break;
+        case 'embed':
+          // For embed videos, we can't directly control them due to cross-origin restrictions
+          // But we can send the command to other users
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'play',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Play command sent. Embedded videos may not support remote control.', 'incoming');
           }
           break;
       }
@@ -1290,6 +1364,16 @@
                 mediaType: 'local-file'
               });
             }
+          }
+          break;
+        case 'embed':
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'pause',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Pause command sent. Embedded videos may not support remote control.', 'incoming');
           }
           break;
       }
@@ -1335,8 +1419,30 @@
             }
           }
           break;
+        case 'embed':
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'stop',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Stop command sent. Embedded videos may not support remote control.', 'incoming');
+          }
+          break;
       }
     }
+
+    // Update the sync button to also request room state
+    syncMediaBtn.addEventListener('click', () => {
+      if (currentMediaRoom) {
+        socket.emit('get-room-state', currentMediaRoom);
+        addMediaChatMessage('System', 'Requesting current media state from room...', 'incoming');
+      }
+    });
+
+    becomeHostBtn.addEventListener('click', () => {
+      socket.emit('request-host', currentMediaRoom);
+    });
 
     function syncWithHost() {
       socket.emit('request-sync', currentMediaRoom);
