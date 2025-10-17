@@ -112,18 +112,76 @@
         <h2 class="text-xl font-semibold mb-4 flex items-center">
           <i class="fas fa-door-open mr-2 text-green-500"></i> Media Room
         </h2>
-        <div class="flex flex-col md:flex-row gap-4 mb-4">
-          <input id="mediaRoomName" placeholder="Room name" value="family-media-room"
-                 class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
-          <input id="mediaDisplayName" placeholder="Your name" value="User"
-                 class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
-          <button id="joinMediaBtn" class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold">
-            <i class="fas fa-play mr-2"></i> Join Room
+        
+        <!-- Room Type Selection -->
+        <div class="flex gap-4 mb-4">
+          <button id="joinPublicRoomBtn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold">
+            <i class="fas fa-users mr-2"></i> Join Public Room
           </button>
-          <button id="leaveMediaBtn" class="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold" disabled>
-            <i class="fas fa-stop mr-2"></i> Leave
+          <button id="createPrivateRoomBtn" class="flex-1 bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold">
+            <i class="fas fa-lock mr-2"></i> Create Private Room
           </button>
         </div>
+
+        <!-- Public Room Section -->
+        <div id="publicRoomSection" class="mb-4 p-4 bg-blue-900/20 rounded-lg border border-blue-500/30">
+          <div class="flex items-center mb-2">
+            <i class="fas fa-info-circle text-blue-400 mr-2"></i>
+            <span class="text-blue-300 font-semibold">Public Room - Anyone can join</span>
+          </div>
+          <div class="flex flex-col md:flex-row gap-4">
+            <input id="mediaRoomName" placeholder="Room name" value="public-lobby"
+                   class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <input id="mediaDisplayName" placeholder="Your name" value="User"
+                   class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <button id="joinMediaBtn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold">
+              <i class="fas fa-sign-in-alt mr-2"></i> Join
+            </button>
+          </div>
+        </div>
+
+        <!-- Private Room Section -->
+        <div id="privateRoomSection" class="hidden mb-4 p-4 bg-green-900/20 rounded-lg border border-green-500/30">
+          <div class="flex items-center mb-2">
+            <i class="fas fa-lock text-green-400 mr-2"></i>
+            <span class="text-green-300 font-semibold">Private Room - Only people with the code can join</span>
+          </div>
+          <div class="flex flex-col md:flex-row gap-4 items-center">
+            <input id="privateDisplayName" placeholder="Your name" value="User"
+                   class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <button id="createPrivateBtn" class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold">
+              <i class="fas fa-plus mr-2"></i> Create Room
+            </button>
+          </div>
+          <div id="privateRoomInfo" class="hidden mt-3 p-3 bg-green-800/40 rounded-lg">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-green-300 font-semibold">Room Created!</span>
+                <p class="text-green-200">Share this code with colleagues:</p>
+              </div>
+              <div class="text-right">
+                <div id="roomCodeDisplay" class="text-2xl font-bold text-white bg-green-700 px-4 py-2 rounded-lg"></div>
+                <button id="copyRoomCode" class="text-sm text-green-300 hover:text-green-100 mt-1">
+                  <i class="fas fa-copy mr-1"></i> Copy Code
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Current Room Info -->
+        <div id="currentRoomInfo" class="hidden mb-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="text-purple-300 font-semibold" id="currentRoomName"></span>
+              <span id="roomPrivacyBadge" class="ml-2 px-2 py-1 text-xs rounded-full"></span>
+            </div>
+            <button id="leaveMediaBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg font-semibold">
+              <i class="fas fa-sign-out-alt mr-1"></i> Leave
+            </button>
+          </div>
+        </div>
+
         <div id="mediaRoomStatus" class="flex items-center text-sm">
           <span class="h-3 w-3 rounded-full bg-red-500 mr-2"></span>
           <span>Not connected to media room</span>
@@ -369,6 +427,20 @@
     const directUrlFullscreen = document.getElementById('directUrlFullscreen');
     const localFileFullscreen = document.getElementById('localFileFullscreen');
 
+    // New DOM Elements for room management
+    const joinPublicRoomBtn = document.getElementById('joinPublicRoomBtn');
+    const createPrivateRoomBtn = document.getElementById('createPrivateRoomBtn');
+    const publicRoomSection = document.getElementById('publicRoomSection');
+    const privateRoomSection = document.getElementById('privateRoomSection');
+    const privateDisplayName = document.getElementById('privateDisplayName');
+    const createPrivateBtn = document.getElementById('createPrivateBtn');
+    const privateRoomInfo = document.getElementById('privateRoomInfo');
+    const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+    const copyRoomCode = document.getElementById('copyRoomCode');
+    const currentRoomInfo = document.getElementById('currentRoomInfo');
+    const currentRoomName = document.getElementById('currentRoomName');
+    const roomPrivacyBadge = document.getElementById('roomPrivacyBadge');
+
     // State variables
     let youtubePlayerObj = null;
     let localMediaPlayer = null;
@@ -409,6 +481,68 @@
         status === 'connected' ? `Connected to ${currentMediaRoom} (${isMediaHost ? 'Host' : 'Participant'})` :
         status === 'connecting' ? 'Connecting to media room...' : 'Not connected to media room';
     }
+
+    // Room type selection
+    joinPublicRoomBtn.addEventListener('click', () => {
+      publicRoomSection.classList.remove('hidden');
+      privateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
+    });
+
+    createPrivateRoomBtn.addEventListener('click', () => {
+      privateRoomSection.classList.remove('hidden');
+      publicRoomSection.classList.add('hidden');
+    });
+
+    // Create private room
+    createPrivateBtn.addEventListener('click', () => {
+      const displayName = privateDisplayName.value.trim() || 'User';
+      socket.emit('create-private-room', displayName);
+    });
+
+    // Handle private room creation
+    socket.on('private-room-created', (roomCode, users) => {
+      currentMediaRoom = roomCode;
+      mediaDisplayNameValue = privateDisplayName.value.trim() || 'User';
+      
+      // Update UI
+      privateRoomInfo.classList.remove('hidden');
+      roomCodeDisplay.textContent = roomCode;
+      currentRoomInfo.classList.remove('hidden');
+      currentRoomName.textContent = roomCode;
+      roomPrivacyBadge.textContent = '🔒 Private';
+      roomPrivacyBadge.className = 'ml-2 px-2 py-1 text-xs rounded-full bg-green-600 text-white';
+      
+      // Update participants
+      mediaRoomUsers.clear();
+      users.forEach(user => {
+        mediaRoomUsers.set(user.id, user);
+      });
+      
+      isMediaHost = true;
+      updateMediaRoomStatus('connected');
+      updateConnectionStatus('connected');
+      updateMediaParticipants();
+      
+      // Enable media controls
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+        btn.disabled = false;
+      });
+      
+      becomeHostBtn.disabled = true;
+      addMediaChatMessage('System', 'Private room created! You are the host. Share the room code with colleagues.', 'incoming');
+    });
+
+    // Copy room code
+    copyRoomCode.addEventListener('click', () => {
+      navigator.clipboard.writeText(roomCodeDisplay.textContent).then(() => {
+        const originalText = copyRoomCode.innerHTML;
+        copyRoomCode.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+        setTimeout(() => {
+          copyRoomCode.innerHTML = originalText;
+        }, 2000);
+      });
+    });
 
     // Media Source Tab Switching
     mediaSourceTabs.forEach(tab => {
@@ -457,6 +591,12 @@
       if (currentMediaRoom) {
         socket.emit('leave-media-room', currentMediaRoom);
       }
+      
+      // Hide room info
+      currentRoomInfo.classList.add('hidden');
+      publicRoomSection.classList.remove('hidden');
+      privateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
       
       // Reset media state
       stopMediaSync();
@@ -619,8 +759,8 @@
     }
 
     // Socket event handlers
-    socket.on('media-room-joined', (users, hostId, mediaState) => {
-      console.log('Media room joined, users:', users, 'Media state:', mediaState);
+    socket.on('media-room-joined', (users, hostId, mediaState, privacyInfo) => {
+      console.log('Media room joined, privacy:', privacyInfo);
       
       users.forEach(user => {
         mediaRoomUsers.set(user.id, user);
@@ -630,6 +770,18 @@
       updateMediaRoomStatus('connected');
       updateConnectionStatus('connected');
       updateMediaParticipants();
+      
+      // Show current room info
+      currentRoomInfo.classList.remove('hidden');
+      currentRoomName.textContent = currentMediaRoom;
+      
+      if (privacyInfo && !privacyInfo.isPublic) {
+        roomPrivacyBadge.textContent = '🔒 Private';
+        roomPrivacyBadge.className = 'ml-2 px-2 py-1 text-xs rounded-full bg-green-600 text-white';
+      } else {
+        roomPrivacyBadge.textContent = '🌐 Public';
+        roomPrivacyBadge.className = 'ml-2 px-2 py-1 text-xs rounded-full bg-blue-600 text-white';
+      }
       
       // Enable media controls
       [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
