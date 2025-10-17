@@ -34,16 +34,28 @@ io.on('connection', (socket) => {
     try {
       console.log(`🎬 ${socket.id} joining media room ${roomName} as ${displayName}`);
       
-      // Check if room exists
-      const mediaRoomId = `media-${roomName}`;
-      if (!mediaRooms.has(mediaRoomId)) {
-        socket.emit('room-error', { message: 'Room does not exist' });
-        return;
-      }
-      
       // Leave any other media rooms
       for (const r of socket.rooms) {
         if (r.startsWith('media-')) socket.leave(r);
+      }
+      
+      const mediaRoomId = `media-${roomName}`;
+      
+      // Check if room exists - if not, create it for public rooms
+      if (!mediaRooms.has(mediaRoomId)) {
+        // Only create room if it's public lobby or we're allowing room creation
+        if (roomName === 'public-lobby' || roomName === '') {
+          mediaRooms.set(mediaRoomId, new Map());
+          roomPrivacy.set(mediaRoomId, {
+            isPublic: true,
+            createdBy: socket.id,
+            createdAt: Date.now()
+          });
+          console.log(`🎯 Created new public room: ${roomName}`);
+        } else {
+          socket.emit('room-error', { message: 'Room does not exist' });
+          return;
+        }
       }
       
       socket.join(mediaRoomId);
