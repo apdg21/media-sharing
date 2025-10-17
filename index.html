@@ -479,6 +479,11 @@
     const mediaRoomUsers = new Map();
     const SYNC_THRESHOLD = 2; // Sync if difference is more than 2 seconds
 
+    // Embed video tracking
+    window.embedIsPlaying = false;
+    window.embedSimulatedTime = 0;
+    window.embedLastUpdate = Date.now();
+
     // Update header connection status
     function updateConnectionStatus(status) {
       const indicator = connectionStatus.querySelector('.h-3');
@@ -659,12 +664,15 @@
         socket.emit('leave-media-room', currentMediaRoom);
       }
       
-      // Re-enable private room inputs
+      // Re-enable ALL inputs
+      mediaRoomName.disabled = false;
+      mediaDisplayName.disabled = false;
       privateRoomCode.disabled = false;
       privateJoinDisplayName.disabled = false;
       joinPrivateRoomBtnAction.disabled = false;
+      joinMediaBtn.disabled = false;
       
-      // Hide room info
+      // Hide room info and show public room by default
       currentRoomInfo.classList.add('hidden');
       publicRoomSection.classList.remove('hidden');
       privateRoomSection.classList.add('hidden');
@@ -686,6 +694,10 @@
         directUrlMediaPlayer = null;
       }
       
+      // Reset embed tracking
+      window.embedIsPlaying = false;
+      window.embedSimulatedTime = 0;
+      
       // Reset players
       resetAllPlayers();
       
@@ -706,9 +718,6 @@
       // Disable all controls
       disableAllControls();
       
-      joinMediaBtn.disabled = false;
-      mediaRoomName.disabled = false;
-      mediaDisplayName.disabled = false;
       leaveMediaBtn.disabled = true;
       
       updateMediaRoomStatus('disconnected');
@@ -1117,6 +1126,55 @@
       }
     }
 
+    // Enhanced embed video loading with better sync
+    function loadEmbedVideo(platform, videoId, startTime = 0) {
+      let embedUrl = '';
+      let displayName = '';
+      
+      switch (platform) {
+        case 'dailymotion':
+          embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&api=postMessage&autoplay=1&mute=0`;
+          displayName = 'Dailymotion';
+          break;
+        case 'vimeo':
+          embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+          displayName = 'Vimeo';
+          break;
+        case 'other':
+          embedUrl = videoId;
+          displayName = 'Embedded';
+          break;
+      }
+      
+      embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      currentMediaType = 'embed';
+      enableMediaControls();
+      addMediaChatMessage('System', `Loaded ${displayName} video`, 'incoming');
+      
+      // Reset embed tracking
+      window.embedSimulatedTime = startTime || 0;
+      window.embedLastUpdate = Date.now();
+      window.embedIsPlaying = false;
+      
+      // Start sync after a short delay to let the embed load
+      setTimeout(() => {
+        if (isMediaHost) {
+          startMediaSync();
+        }
+      }, 2000);
+      
+      if (isMediaHost && currentMediaRoom) {
+        socket.emit('media-control', {
+          room: currentMediaRoom,
+          type: 'load-embed',
+          mediaType: 'embed',
+          platform: platform,
+          videoId: videoId,
+          startTime: startTime
+        });
+      }
+    }
+
     // Embed Video Loading
     loadEmbedBtn.addEventListener('click', () => {
       const platform = embedPlatform.value;
@@ -1129,45 +1187,6 @@
       
       loadEmbedVideo(platform, videoId);
     });
-
-    function loadEmbedVideo(platform, videoId, startTime = 0) {
-    let embedUrl = '';
-    let displayName = '';
-    
-    switch (platform) {
-        case 'dailymotion':
-            // Try different versions - test which one works best
-            embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&autoplay=1&mute=0`;
-            // Alternative: embedUrl = `https://geo.dailymotion.com/embed/video/${videoId}?autoplay=1`;
-            // Alternative: embedUrl = `https://www.dailymotion.com/player/metadata/video/${videoId}`;
-            displayName = 'Dailymotion';
-            break;
-        case 'vimeo':
-            embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
-            displayName = 'Vimeo';
-            break;
-        case 'other':
-            embedUrl = videoId;
-            displayName = 'Embedded';
-            break;
-    }
-    
-    embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
-    currentMediaType = 'embed';
-    enableMediaControls();
-    addMediaChatMessage('System', `Loaded ${displayName} video`, 'incoming');
-    
-    if (isMediaHost && currentMediaRoom) {
-        socket.emit('media-control', {
-        room: currentMediaRoom,
-        type: 'load-embed',
-        mediaType: 'embed',
-        platform: platform,
-        videoId: videoId,
-        startTime: startTime
-        });
-    }
-    }
 
     // Local File Handling
     localFileInput.addEventListener('change', () => {
@@ -1314,15 +1333,16 @@
           }
           break;
         case 'embed':
-          // For embed videos, we can't directly control them due to cross-origin restrictions
-          // But we can send the command to other users
+          // For embed videos, we track state for sync
+          window.embedIsPlaying = true;
+          window.embedLastUpdate = Date.now();
           if (isMediaHost && currentMediaRoom) {
             socket.emit('media-control', {
               room: currentMediaRoom,
               type: 'play',
               mediaType: 'embed'
             });
-            addMediaChatMessage('System', 'Play command sent. Embedded videos may not support remote control.', 'incoming');
+            addMediaChatMessage('System', 'Play command sent. Use sync to align timing.', 'incoming');
           }
           break;
       }
@@ -1367,13 +1387,14 @@
           }
           break;
         case 'embed':
+          window.embedIsPlaying = false;
           if (isMediaHost && currentMediaRoom) {
             socket.emit('media-control', {
               room: currentMediaRoom,
               type: 'pause',
               mediaType: 'embed'
             });
-            addMediaChatMessage('System', 'Pause command sent. Embedded videos may not support remote control.', 'incoming');
+            addMediaChatMessage('System', 'Pause command sent. Use sync to align timing.', 'incoming');
           }
           break;
       }
@@ -1420,13 +1441,15 @@
           }
           break;
         case 'embed':
+          window.embedIsPlaying = false;
+          window.embedSimulatedTime = 0;
           if (isMediaHost && currentMediaRoom) {
             socket.emit('media-control', {
               room: currentMediaRoom,
               type: 'stop',
               mediaType: 'embed'
             });
-            addMediaChatMessage('System', 'Stop command sent. Embedded videos may not support remote control.', 'incoming');
+            addMediaChatMessage('System', 'Stop command sent. Use sync to align timing.', 'incoming');
           }
           break;
       }
@@ -1446,6 +1469,218 @@
 
     function syncWithHost() {
       socket.emit('request-sync', currentMediaRoom);
+    }
+
+    // Enhanced media sync for embed videos
+    function startMediaSync() {
+      if (mediaSyncInterval) {
+        clearInterval(mediaSyncInterval);
+      }
+      
+      mediaSyncInterval = setInterval(() => {
+        if (isMediaHost && currentMediaRoom) {
+          let currentTime = 0;
+          let state = 2; // Default to paused
+          
+          switch (currentMediaType) {
+            case 'youtube':
+              if (youtubePlayerObj) {
+                currentTime = youtubePlayerObj.getCurrentTime();
+                state = youtubePlayerObj.getPlayerState();
+              }
+              break;
+            case 'direct-url':
+              if (directUrlMediaPlayer) {
+                currentTime = directUrlMediaPlayer.currentTime;
+                state = directUrlMediaPlayer.paused ? 2 : 1;
+              }
+              break;
+            case 'local-file':
+              if (localMediaPlayer) {
+                currentTime = localMediaPlayer.currentTime;
+                state = localMediaPlayer.paused ? 2 : 1;
+              }
+              break;
+            case 'embed':
+              // For embed videos, we can't get current time due to cross-origin restrictions
+              // So we'll use a simulated time that increments when playing
+              if (window.embedIsPlaying) {
+                const now = Date.now();
+                const delta = (now - window.embedLastUpdate) / 1000;
+                window.embedSimulatedTime += delta;
+                window.embedLastUpdate = now;
+              }
+              currentTime = window.embedSimulatedTime;
+              state = window.embedIsPlaying ? 1 : 2;
+              break;
+          }
+          
+          socket.emit('media-sync', {
+            room: currentMediaRoom,
+            time: currentTime,
+            state: state,
+            timestamp: Date.now()
+          });
+        }
+      }, 1000);
+    }
+
+    function stopMediaSync() {
+      if (mediaSyncInterval) {
+        clearInterval(mediaSyncInterval);
+        mediaSyncInterval = null;
+      }
+    }
+
+    // Enhanced sync handling for embed videos
+    socket.on('media-sync', (data) => {
+      if (!isMediaHost && data.from !== socket.id) {
+        syncMediaTime(data.time, data.state, data.timestamp);
+      }
+    });
+
+    function syncMediaTime(time, state, timestamp) {
+      const now = Date.now();
+      const latency = (now - timestamp) / 1000;
+      const adjustedTime = time + latency;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const currentTime = youtubePlayerObj.getCurrentTime();
+            if (Math.abs(currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              youtubePlayerObj.seekTo(adjustedTime, true);
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && youtubePlayerObj.getPlayerState() !== YT.PlayerState.PLAYING) {
+              youtubePlayerObj.playVideo();
+            } else if (state === 2 && youtubePlayerObj.getPlayerState() !== YT.PlayerState.PAUSED) {
+              youtubePlayerObj.pauseVideo();
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            if (Math.abs(directUrlMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              directUrlMediaPlayer.currentTime = adjustedTime;
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && directUrlMediaPlayer.paused) {
+              directUrlMediaPlayer.play();
+            } else if (state === 2 && !directUrlMediaPlayer.paused) {
+              directUrlMediaPlayer.pause();
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            if (Math.abs(localMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              localMediaPlayer.currentTime = adjustedTime;
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && localMediaPlayer.paused) {
+              localMediaPlayer.play();
+            } else if (state === 2 && !localMediaPlayer.paused) {
+              localMediaPlayer.pause();
+            }
+          }
+          break;
+        case 'embed':
+          // For embed videos, we simulate sync by tracking time locally
+          window.embedSimulatedTime = adjustedTime;
+          window.embedLastUpdate = Date.now();
+          window.embedIsPlaying = state === 1;
+          
+          // Show sync status in chat for embed videos
+          if (Math.abs(window.embedSimulatedTime - adjustedTime) > SYNC_THRESHOLD) {
+            addMediaChatMessage('System', `Video synced to ${formatTime(adjustedTime)}`, 'incoming');
+          }
+          break;
+      }
+    }
+
+    // Socket event handlers for media controls
+    socket.on('media-control', (data) => {
+      console.log('Received media control:', data);
+      
+      if (data.type === 'load-youtube') {
+        loadYouTubeVideo(data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-direct-url') {
+        loadDirectUrlVideo(data.url, data.startTime || 0);
+      } else if (data.type === 'load-embed') {
+        loadEmbedVideo(data.platform, data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-local-file') {
+        addMediaChatMessage('System', `Host loaded local file: ${data.fileName}. You need to load the same file manually.`, 'incoming');
+      } else if (data.type === 'play') {
+        playMedia();
+      } else if (data.type === 'pause') {
+        pauseMedia();
+      } else if (data.type === 'stop') {
+        stopMedia();
+      } else if (data.type === 'seek') {
+        seekMedia(data.time);
+      }
+    });
+
+    socket.on('media-sync-request', (data) => {
+      if (isMediaHost) {
+        let currentTime = 0;
+        
+        switch (currentMediaType) {
+          case 'youtube':
+            if (youtubePlayerObj) {
+              currentTime = youtubePlayerObj.getCurrentTime();
+            }
+            break;
+          case 'direct-url':
+            if (directUrlMediaPlayer) {
+              currentTime = directUrlMediaPlayer.currentTime;
+            }
+            break;
+          case 'local-file':
+            if (localMediaPlayer) {
+              currentTime = localMediaPlayer.currentTime;
+            }
+            break;
+          case 'embed':
+            currentTime = window.embedSimulatedTime;
+            break;
+        }
+        
+        socket.emit('media-sync', {
+          room: currentMediaRoom,
+          time: currentTime,
+          state: window.embedIsPlaying ? 1 : 2,
+          timestamp: Date.now()
+        });
+      }
+    });
+
+    function seekMedia(time) {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.seekTo(time, true);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.currentTime = time;
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.currentTime = time;
+          }
+          break;
+        case 'embed':
+          window.embedSimulatedTime = time;
+          addMediaChatMessage('System', `Seeked to ${formatTime(time)}`, 'incoming');
+          break;
+      }
     }
 
     // Media Progress Control
@@ -1471,6 +1706,10 @@
             const newTime = (progress / 100) * localMediaPlayer.duration;
             currentTime.textContent = formatTime(newTime);
           }
+          break;
+        case 'embed':
+          const newTime = (progress / 100) * 600; // Assume 10min for embed
+          currentTime.textContent = formatTime(newTime);
           break;
       }
     });
@@ -1519,162 +1758,20 @@
             }
           }
           break;
+        case 'embed':
+          const newTime = (progress / 100) * 600; // Assume 10min for embed
+          window.embedSimulatedTime = newTime;
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'seek',
+              time: newTime
+            });
+          }
+          addMediaChatMessage('System', `Seeked to ${formatTime(newTime)}`, 'incoming');
+          break;
       }
     });
-
-    // Media Sync
-    function startMediaSync() {
-      if (mediaSyncInterval) {
-        clearInterval(mediaSyncInterval);
-      }
-      
-      mediaSyncInterval = setInterval(() => {
-        if (isMediaHost && currentMediaRoom) {
-          let currentTime = 0;
-          
-          switch (currentMediaType) {
-            case 'youtube':
-              if (youtubePlayerObj) {
-                currentTime = youtubePlayerObj.getCurrentTime();
-              }
-              break;
-            case 'direct-url':
-              if (directUrlMediaPlayer) {
-                currentTime = directUrlMediaPlayer.currentTime;
-              }
-              break;
-            case 'local-file':
-              if (localMediaPlayer) {
-                currentTime = localMediaPlayer.currentTime;
-              }
-              break;
-          }
-          
-          socket.emit('media-sync', {
-            room: currentMediaRoom,
-            time: currentTime,
-            timestamp: Date.now()
-          });
-        }
-      }, 1000);
-    }
-
-    function stopMediaSync() {
-      if (mediaSyncInterval) {
-        clearInterval(mediaSyncInterval);
-        mediaSyncInterval = null;
-      }
-    }
-
-    // Socket event handlers for media controls
-    socket.on('media-control', (data) => {
-      console.log('Received media control:', data);
-      
-      if (data.type === 'load-youtube') {
-        loadYouTubeVideo(data.videoId, data.startTime || 0);
-      } else if (data.type === 'load-direct-url') {
-        loadDirectUrlVideo(data.url, data.startTime || 0);
-      } else if (data.type === 'load-embed') {
-        loadEmbedVideo(data.platform, data.videoId, data.startTime || 0);
-      } else if (data.type === 'load-local-file') {
-        addMediaChatMessage('System', `Host loaded local file: ${data.fileName}. You need to load the same file manually.`, 'incoming');
-      } else if (data.type === 'play') {
-        playMedia();
-      } else if (data.type === 'pause') {
-        pauseMedia();
-      } else if (data.type === 'stop') {
-        stopMedia();
-      } else if (data.type === 'seek') {
-        seekMedia(data.time);
-      }
-    });
-
-    socket.on('media-sync', (data) => {
-      if (!isMediaHost) {
-        syncMediaTime(data.time, data.timestamp);
-      }
-    });
-
-    socket.on('media-sync-request', (data) => {
-      if (isMediaHost) {
-        let currentTime = 0;
-        
-        switch (currentMediaType) {
-          case 'youtube':
-            if (youtubePlayerObj) {
-              currentTime = youtubePlayerObj.getCurrentTime();
-            }
-            break;
-          case 'direct-url':
-            if (directUrlMediaPlayer) {
-              currentTime = directUrlMediaPlayer.currentTime;
-            }
-            break;
-          case 'local-file':
-            if (localMediaPlayer) {
-              currentTime = localMediaPlayer.currentTime;
-            }
-            break;
-        }
-        
-        socket.emit('media-sync', {
-          room: currentMediaRoom,
-          time: currentTime,
-          timestamp: Date.now()
-        });
-      }
-    });
-
-    function seekMedia(time) {
-      switch (currentMediaType) {
-        case 'youtube':
-          if (youtubePlayerObj) {
-            youtubePlayerObj.seekTo(time, true);
-          }
-          break;
-        case 'direct-url':
-          if (directUrlMediaPlayer) {
-            directUrlMediaPlayer.currentTime = time;
-          }
-          break;
-        case 'local-file':
-          if (localMediaPlayer) {
-            localMediaPlayer.currentTime = time;
-          }
-          break;
-      }
-    }
-
-    function syncMediaTime(time, timestamp) {
-      const now = Date.now();
-      const latency = (now - timestamp) / 1000;
-      const adjustedTime = time + latency;
-      
-      switch (currentMediaType) {
-        case 'youtube':
-          if (youtubePlayerObj) {
-            const currentTime = youtubePlayerObj.getCurrentTime();
-            if (Math.abs(currentTime - adjustedTime) > SYNC_THRESHOLD) {
-              youtubePlayerObj.seekTo(adjustedTime, true);
-            }
-          }
-          break;
-        case 'direct-url':
-          if (directUrlMediaPlayer) {
-            if (Math.abs(directUrlMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
-              directUrlMediaPlayer.currentTime = adjustedTime;
-            }
-          }
-          break;
-        case 'local-file':
-          if (localMediaPlayer) {
-            if (Math.abs(localMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
-              localMediaPlayer.currentTime = adjustedTime;
-            }
-          }
-          break;
-      }
-    }
 
     // Chat functionality
     sendMediaChatBtn.addEventListener('click', sendMediaChatMessage);
