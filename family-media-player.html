@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Media Player</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Mobile-specific height for players */
+    @media (max-width: 768px) {
+      #localFilePlayer, #directUrlPlayer, #embedPlayer, #youtubePlayer {
+        height: 300px !important;
+      }
+      .media-player {
+        max-height: 300px;
+      }
+    }
+    
+    /* Media Source Tabs */
+    .media-source-tabs {
+      display: flex;
+      border-bottom: 1px solid #4B5563;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .media-source-tab {
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: #9CA3AF;
+      flex: 1;
+      min-width: 70px;
+      text-align: center;
+      transition: all 0.3s;
+      font-size: 0.75rem;
+    }
+    @media (min-width: 768px) {
+      .media-source-tab {
+        padding: 0.75rem 1rem;
+        min-width: 90px;
+        font-size: 0.875rem;
+      }
+    }
+    .media-source-tab.active {
+      border-bottom-color: #3B82F6;
+      color: #3B82F6;
+      background-color: #374151;
+    }
+    .media-source-content {
+      display: none;
+    }
+    .media-source-content.active {
+      display: block;
+    }
+    
+    /* Player styles */
+    .media-player {
+      max-width: 100%;
+      max-height: 500px;
+    }
+    #localFilePlayer, #directUrlPlayer, #embedPlayer, #youtubePlayer {
+      width: 100%;
+      height: 500px;
+    }
+    
+    #embedPlayer iframe,
+    #youtubePlayer iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 0.5rem;
+    }
+    
+    /* Custom fullscreen styles */
+    .media-player-container {
+      position: relative;
+      background: #000;
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    
+    .fullscreen-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 1000;
+    }
+    
+    .fullscreen-btn:hover {
+      background: rgba(0,0,0,0.9);
+    }
+    
+    /* Mobile-specific adjustments */
+    @media (max-width: 768px) {
+      input, select, button:not(.fullscreen-btn) {
+        min-height: 48px;
+      }
+      
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      .main-content > .bg-gray-800 {
+        padding: 1rem;
+      }
+      
+      #mediaProgress {
+        height: 24px;
+        padding: 0;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      header .container {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+      }
+      
+      .text-2xl {
+        font-size: 1.5rem;
+      }
+      
+      .text-xl {
+        font-size: 1.25rem;
+      }
+      
+      button {
+        font-size: 0.875rem;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+  <header class="bg-gray-800 p-4 shadow-md">
+    <div class="container mx-auto">
+      <h1 class="text-2xl font-bold flex items-center justify-center md:justify-start">
+        <i class="fas fa-film mr-2 text-blue-400"></i> Family Media Player
+      </h1>
+    </div>
+  </header>
+
+  <main class="container mx-auto p-4">
+    <!-- Media Player Tab (only one tab now) -->
+    <div class="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+      <!-- Media Source Tabs -->
+      <div class="bg-gray-700 p-4 rounded-lg mb-6">
+        <h2 class="text-xl font-semibold mb-4 flex items-center">
+          <i class="fas fa-video mr-2 text-blue-400"></i> Media Source
+        </h2>
+        
+        <div class="media-source-tabs">
+          <div class="media-source-tab active" data-source="youtube">
+            <i class="fab fa-youtube mr-1 md:mr-2"></i>YouTube
+          </div>
+          <div class="media-source-tab" data-source="direct-url">
+            <i class="fas fa-link mr-1 md:mr-2"></i>Direct URL
+          </div>
+          <div class="media-source-tab" data-source="embed">
+            <i class="fas fa-code mr-1 md:mr-2"></i>Embed
+          </div>
+          <div class="media-source-tab" data-source="local-file">
+            <i class="fas fa-file-video mr-1 md:mr-2"></i>Local File
+          </div>
+        </div>
+
+        <!-- YouTube Source -->
+        <div id="youtube-source" class="media-source-content active">
+          <div class="mb-4 space-y-3">
+            <input id="youtubeUrl" placeholder="Paste YouTube URL here" 
+                   class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <button id="loadYoutubeBtn" class="w-full bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fab fa-youtube mr-2"></i> Load YouTube Video
+            </button>
+          </div>
+          <div class="media-player-container bg-black rounded-lg overflow-hidden">
+            <div id="youtubePlayer" class="media-player">
+              <div class="text-center text-gray-400 py-8 md:py-16">
+                <i class="fab fa-youtube text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                <p class="text-base md:text-lg">Enter a YouTube URL to load a video</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Direct URL Source -->
+        <div id="direct-url-source" class="media-source-content">
+          <div class="mb-4 space-y-3">
+            <input id="directVideoUrl" placeholder="Paste direct video URL (MP4, WebM, etc.)" 
+                   class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
+              <strong>Supported formats:</strong> MP4, WebM, OGG, MOV
+            </div>
+            <button id="loadDirectUrlBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fas fa-external-link-alt mr-2"></i> Load Video URL
+            </button>
+          </div>
+          <div class="media-player-container bg-black rounded-lg overflow-hidden relative">
+            <div id="directUrlPlayer" class="media-player">
+              <div class="text-center text-gray-400 py-8 md:py-16">
+                <i class="fas fa-link text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                <p class="text-base md:text-lg">Enter a direct video URL to load a video</p>
+              </div>
+            </div>
+            <button class="fullscreen-btn hidden" id="directUrlFullscreen">
+              <i class="fas fa-expand mr-1"></i> Fullscreen
+            </button>
+          </div>
+        </div>
+
+        <!-- Embed Video Source -->
+        <div id="embed-source" class="media-source-content">
+          <div class="mb-4 space-y-3">
+            <select id="embedPlatform" class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <option value="dailymotion">Dailymotion</option>
+              <option value="vimeo">Vimeo</option>
+              <option value="other">Other Platform</option>
+            </select>
+            <input id="embedVideoId" placeholder="Enter video ID or embed URL" 
+                   class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+            <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
+              <strong>Dailymotion:</strong> Enter video ID (e.g., x8abcde)<br>
+              <strong>Vimeo:</strong> Enter video ID (e.g., 123456789)<br>
+              <strong>Other:</strong> Paste full embed URL
+            </div>
+            <button id="loadEmbedBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fas fa-code mr-2"></i> Load Embed Video
+            </button>
+          </div>
+          <div class="media-player-container bg-black rounded-lg overflow-hidden">
+            <div id="embedPlayer" class="media-player">
+              <div class="text-center text-gray-400 py-8 md:py-16">
+                <i class="fas fa-code text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                <p class="text-base md:text-lg">Select a platform and enter video ID</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Local File Source -->
+        <div id="local-file-source" class="media-source-content">
+          <div class="mb-4 space-y-3">
+            <input type="file" id="localFileInput" accept="video/*,audio/*" 
+                   class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <button id="playLocalBtn" class="w-full bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+              <i class="fas fa-play mr-2"></i> Play Local File
+            </button>
+          </div>
+          <div class="media-player-container bg-black rounded-lg overflow-hidden relative">
+            <div id="localFilePlayer" class="media-player">
+              <div class="text-center text-gray-400 py-8 md:py-16">
+                <i class="fas fa-file-video text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                <p class="text-base md:text-lg">Select a video or audio file to play</p>
+              </div>
+            </div>
+            <button class="fullscreen-btn hidden" id="localFileFullscreen">
+              <i class="fas fa-expand mr-1"></i> Fullscreen
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Media Controls -->
+      <div class="bg-gray-700 p-4 rounded-lg">
+        <h2 class="text-xl font-semibold mb-4 flex items-center">
+          <i class="fas fa-sliders-h mr-2 text-blue-400"></i> Media Controls
+        </h2>
+        <div class="grid grid-cols-3 gap-2 mb-4">
+          <button id="playMediaBtn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+            <i class="fas fa-play mr-2"></i> Play
+          </button>
+          <button id="pauseMediaBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+            <i class="fas fa-pause mr-2"></i> Pause
+          </button>
+          <button id="stopMediaBtn" class="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+            <i class="fas fa-stop mr-2"></i> Stop
+          </button>
+        </div>
+        <div class="mt-4">
+          <label for="mediaProgress" class="block text-sm font-medium mb-2">Progress</label>
+          <input type="range" id="mediaProgress" min="0" max="100" value="0" 
+                 class="w-full h-2 md:h-3 bg-gray-600 rounded-lg appearance-none cursor-pointer" disabled>
+          <div class="flex justify-between text-sm text-gray-400 mt-2">
+            <span id="currentTime">0:00</span>
+            <span id="duration">0:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    // DOM Elements
+    const mediaSourceTabs = document.querySelectorAll('.media-source-tab');
+    const mediaSourceContents = document.querySelectorAll('.media-source-content');
+    
+    // YouTube elements
+    const youtubeUrl = document.getElementById('youtubeUrl');
+    const loadYoutubeBtn = document.getElementById('loadYoutubeBtn');
+    const youtubePlayer = document.getElementById('youtubePlayer');
+    
+    // Direct URL elements
+    const directVideoUrl = document.getElementById('directVideoUrl');
+    const loadDirectUrlBtn = document.getElementById('loadDirectUrlBtn');
+    const directUrlPlayer = document.getElementById('directUrlPlayer');
+    const directUrlFullscreen = document.getElementById('directUrlFullscreen');
+    
+    // Embed elements
+    const embedPlatform = document.getElementById('embedPlatform');
+    const embedVideoId = document.getElementById('embedVideoId');
+    const loadEmbedBtn = document.getElementById('loadEmbedBtn');
+    const embedPlayer = document.getElementById('embedPlayer');
+    
+    // Local file elements
+    const localFileInput = document.getElementById('localFileInput');
+    const playLocalBtn = document.getElementById('playLocalBtn');
+    const localFilePlayer = document.getElementById('localFilePlayer');
+    const localFileFullscreen = document.getElementById('localFileFullscreen');
+    
+    // Control elements
+    const playMediaBtn = document.getElementById('playMediaBtn');
+    const pauseMediaBtn = document.getElementById('pauseMediaBtn');
+    const stopMediaBtn = document.getElementById('stopMediaBtn');
+    const mediaProgress = document.getElementById('mediaProgress');
+    const currentTime = document.getElementById('currentTime');
+    const duration = document.getElementById('duration');
+
+    // State variables
+    let youtubePlayerObj = null;
+    let localMediaPlayer = null;
+    let directUrlMediaPlayer = null;
+    let currentMediaType = null;
+
+    // Media Source Tab Switching
+    mediaSourceTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const source = tab.getAttribute('data-source');
+        
+        mediaSourceTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        mediaSourceContents.forEach(content => {
+          content.classList.remove('active');
+        });
+        document.getElementById(`${source}-source`).classList.add('active');
+      });
+    });
+
+    // YouTube Player API
+    function extractYouTubeId(url) {
+      const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[7].length === 11) ? match[7] : null;
+    }
+
+    loadYoutubeBtn.addEventListener('click', () => {
+      const url = youtubeUrl.value.trim();
+      if (!url) {
+        alert('Please enter a YouTube URL');
+        return;
+      }
+      
+      const videoId = extractYouTubeId(url);
+      if (!videoId) {
+        alert('Invalid YouTube URL');
+        return;
+      }
+      
+      loadYouTubeVideo(videoId);
+    });
+
+    function loadYouTubeVideo(videoId, startTime = 0) {
+      if (youtubePlayerObj) {
+        youtubePlayerObj.destroy();
+      }
+      
+      youtubePlayer.innerHTML = `<div id="yt-player"></div>`;
+      
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      
+      youtubePlayerObj = new YT.Player('yt-player', {
+        height: playerHeight.toString(),
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          'playsinline': 1,
+          'enablejsapi': 1,
+          'origin': window.location.origin,
+          'start': startTime,
+          'rel': 0,
+          'modestbranding': 1,
+          'fs': 1
+        },
+        events: {
+          'onReady': onYouTubePlayerReady,
+          'onStateChange': onYouTubePlayerStateChange
+        }
+      });
+      
+      currentMediaType = 'youtube';
+      enableMediaControls();
+    }
+
+    function onYouTubePlayerReady(event) {
+      duration.textContent = formatTime(youtubePlayerObj.getDuration());
+      enableMediaControls();
+    }
+
+    function onYouTubePlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        updateYouTubeProgress();
+      }
+    }
+
+    function updateYouTubeProgress() {
+      if (youtubePlayerObj && youtubePlayerObj.getPlayerState() === YT.PlayerState.PLAYING) {
+        const current = youtubePlayerObj.getCurrentTime();
+        const total = youtubePlayerObj.getDuration();
+        const progress = (current / total) * 100;
+        
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(current);
+        
+        setTimeout(updateYouTubeProgress, 100);
+      }
+    }
+
+    // Direct URL Video Loading
+    loadDirectUrlBtn.addEventListener('click', () => {
+      const url = directVideoUrl.value.trim();
+      if (!url) {
+        alert('Please enter a video URL');
+        return;
+      }
+      
+      try {
+        new URL(url);
+      } catch (e) {
+        alert('Please enter a valid URL');
+        return;
+      }
+      
+      loadDirectUrlVideo(url);
+    });
+
+    function loadDirectUrlVideo(url, startTime = 0) {
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.pause();
+        directUrlMediaPlayer = null;
+      }
+      
+      directUrlPlayer.innerHTML = '';
+      
+      directUrlMediaPlayer = document.createElement('video');
+      directUrlMediaPlayer.controls = true;
+      directUrlMediaPlayer.className = 'w-full h-full object-contain';
+      directUrlMediaPlayer.src = url;
+      
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      directUrlMediaPlayer.style.height = `${playerHeight}px`;
+      
+      directUrlMediaPlayer.preload = 'auto';
+      directUrlMediaPlayer.crossOrigin = 'anonymous';
+      
+      directUrlPlayer.appendChild(directUrlMediaPlayer);
+      directUrlFullscreen.classList.remove('hidden');
+      
+      directUrlMediaPlayer.addEventListener('loadedmetadata', () => {
+        duration.textContent = formatTime(directUrlMediaPlayer.duration);
+        enableMediaControls();
+        
+        if (startTime > 0) {
+          directUrlMediaPlayer.currentTime = startTime;
+        }
+      });
+      
+      directUrlMediaPlayer.addEventListener('timeupdate', () => {
+        const progress = (directUrlMediaPlayer.currentTime / directUrlMediaPlayer.duration) * 100;
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(directUrlMediaPlayer.currentTime);
+      });
+      
+      currentMediaType = 'direct-url';
+      enableMediaControls();
+    }
+
+    // Embed Video Loading
+    loadEmbedBtn.addEventListener('click', () => {
+      const platform = embedPlatform.value;
+      const videoId = embedVideoId.value.trim();
+      
+      if (!videoId) {
+        alert('Please enter a video ID or URL');
+        return;
+      }
+      
+      loadEmbedVideo(platform, videoId);
+    });
+
+    function loadEmbedVideo(platform, videoId) {
+      let embedUrl = '';
+      
+      switch (platform) {
+        case 'dailymotion':
+          embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&autoplay=1&mute=0`;
+          break;
+        case 'vimeo':
+          embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+          break;
+        case 'other':
+          embedUrl = videoId;
+          break;
+      }
+      
+      embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      const iframe = embedPlayer.querySelector('iframe');
+      if (iframe) {
+        iframe.style.height = `${playerHeight}px`;
+      }
+      
+      currentMediaType = 'embed';
+      enableMediaControls();
+    }
+
+    // Local File Handling
+    localFileInput.addEventListener('change', () => {
+      playLocalBtn.disabled = !localFileInput.files.length;
+    });
+
+    playLocalBtn.addEventListener('click', () => {
+      if (!localFileInput.files.length) {
+        alert('Please select a file first');
+        return;
+      }
+      
+      const file = localFileInput.files[0];
+      const url = URL.createObjectURL(file);
+      
+      loadLocalFile(url);
+    });
+
+    function loadLocalFile(url, startTime = 0) {
+      if (localMediaPlayer) {
+        localMediaPlayer.pause();
+        localMediaPlayer = null;
+      }
+      
+      localFilePlayer.innerHTML = '';
+      
+      localMediaPlayer = document.createElement('video');
+      localMediaPlayer.controls = true;
+      localMediaPlayer.className = 'w-full h-full object-contain';
+      localMediaPlayer.src = url;
+      
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      localMediaPlayer.style.height = `${playerHeight}px`;
+      
+      localFilePlayer.appendChild(localMediaPlayer);
+      localFileFullscreen.classList.remove('hidden');
+      
+      localMediaPlayer.addEventListener('loadedmetadata', () => {
+        duration.textContent = formatTime(localMediaPlayer.duration);
+        enableMediaControls();
+        
+        if (startTime > 0) {
+          localMediaPlayer.currentTime = startTime;
+        }
+      });
+      
+      localMediaPlayer.addEventListener('timeupdate', () => {
+        const progress = (localMediaPlayer.currentTime / localMediaPlayer.duration) * 100;
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(localMediaPlayer.currentTime);
+      });
+      
+      currentMediaType = 'local-file';
+      enableMediaControls();
+    }
+
+    // Media Controls
+    function enableMediaControls() {
+      [playMediaBtn, pauseMediaBtn, stopMediaBtn].forEach(btn => {
+        btn.disabled = false;
+      });
+      mediaProgress.disabled = false;
+    }
+
+    playMediaBtn.addEventListener('click', () => {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) youtubePlayerObj.playVideo();
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) directUrlMediaPlayer.play();
+          break;
+        case 'local-file':
+          if (localMediaPlayer) localMediaPlayer.play();
+          break;
+        case 'embed':
+          // Can't control embed videos directly due to cross-origin restrictions
+          alert('Use the video controls in the embedded player');
+          break;
+      }
+    });
+
+    pauseMediaBtn.addEventListener('click', () => {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) youtubePlayerObj.pauseVideo();
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) directUrlMediaPlayer.pause();
+          break;
+        case 'local-file':
+          if (localMediaPlayer) localMediaPlayer.pause();
+          break;
+        case 'embed':
+          alert('Use the video controls in the embedded player');
+          break;
+      }
+    });
+
+    stopMediaBtn.addEventListener('click', () => {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.stopVideo();
+            mediaProgress.value = 0;
+            currentTime.textContent = '0:00';
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.pause();
+            directUrlMediaPlayer.currentTime = 0;
+            mediaProgress.value = 0;
+            currentTime.textContent = '0:00';
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.pause();
+            localMediaPlayer.currentTime = 0;
+            mediaProgress.value = 0;
+            currentTime.textContent = '0:00';
+          }
+          break;
+        case 'embed':
+          alert('Use the video controls in the embedded player');
+          break;
+      }
+    });
+
+    // Media Progress Control
+    mediaProgress.addEventListener('input', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            const newTime = (progress / 100) * duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            const newTime = (progress / 100) * directUrlMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            const newTime = (progress / 100) * localMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+      }
+    });
+
+    mediaProgress.addEventListener('change', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            youtubePlayerObj.seekTo((progress / 100) * duration, true);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.currentTime = (progress / 100) * directUrlMediaPlayer.duration;
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.currentTime = (progress / 100) * localMediaPlayer.duration;
+          }
+          break;
+      }
+    });
+
+    // Fullscreen functionality
+    directUrlFullscreen.addEventListener('click', () => {
+      if (directUrlPlayer) {
+        if (directUrlPlayer.requestFullscreen) {
+          directUrlPlayer.requestFullscreen();
+        } else if (directUrlPlayer.webkitRequestFullscreen) {
+          directUrlPlayer.webkitRequestFullscreen();
+        } else if (directUrlPlayer.msRequestFullscreen) {
+          directUrlPlayer.msRequestFullscreen();
+        }
+      }
+    });
+
+    localFileFullscreen.addEventListener('click', () => {
+      if (localFilePlayer) {
+        if (localFilePlayer.requestFullscreen) {
+          localFilePlayer.requestFullscreen();
+        } else if (localFilePlayer.webkitRequestFullscreen) {
+          localFilePlayer.webkitRequestFullscreen();
+        } else if (localFilePlayer.msRequestFullscreen) {
+          localFilePlayer.msRequestFullscreen();
+        }
+      }
+    });
+
+    // Utility functions
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return '0:00';
+      
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // Handle responsive resizing
+    window.addEventListener('resize', () => {
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      
+      if (youtubePlayerObj && youtubePlayerObj.getPlayerState) {
+        const iframe = document.querySelector('#yt-player iframe');
+        if (iframe) iframe.style.height = `${playerHeight}px`;
+      }
+      
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.style.height = `${playerHeight}px`;
+      }
+      
+      if (localMediaPlayer) {
+        localMediaPlayer.style.height = `${playerHeight}px`;
+      }
+      
+      const embedIframe = embedPlayer.querySelector('iframe');
+      if (embedIframe) embedIframe.style.height = `${playerHeight}px`;
+    });
+
+    // Disable all controls initially
+    [playMediaBtn, pauseMediaBtn, stopMediaBtn].forEach(btn => {
+      btn.disabled = true;
+    });
+    mediaProgress.disabled = true;
+  </script>
+</body>
+</html>
