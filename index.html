@@ -1,0 +1,2313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Media Sharing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    /* Mobile-specific height for players */
+    @media (max-width: 768px) {
+      #localFilePlayer, #directUrlPlayer, #embedPlayer, #youtubePlayer {
+        height: 300px !important;
+      }
+      .media-player {
+        max-height: 300px;
+      }
+    }
+    
+    /* Main Navigation Tabs */
+    /* Replace or add these styles to your existing CSS */
+
+/* Main Navigation Tabs - Mobile 2x2 layout */
+.main-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  border-bottom: 1px solid #4B5563;
+  margin-bottom: 1rem;
+  position: sticky;
+  top: 0;
+  background: #1F2937;
+  z-index: 10;
+  padding-top: 0.5rem;
+}
+
+/* On desktop, switch back to flex layout */
+@media (min-width: 769px) {
+  .main-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    position: static;
+    grid-template-columns: none;
+  }
+}
+
+/* Adjust tab styling for grid layout */
+.main-tab {
+  padding: 0.75rem 0.5rem;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  color: #9CA3AF;
+  text-align: center;
+  transition: all 0.3s;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  border-right: 1px solid #374151;
+  border-bottom: 1px solid #374151;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60px; /* Ensure enough tap target */
+}
+
+/* Remove right border from last column */
+.main-tab:nth-child(2n) {
+  border-right: none;
+}
+
+/* Remove bottom border from last row */
+.main-tab:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+@media (min-width: 768px) {
+  .main-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    min-height: auto;
+    border-right: none;
+    border-bottom: 3px solid transparent;
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .main-tab.active {
+    border-bottom-color: #3B82F6;
+  }
+}
+
+.main-tab.active {
+  background-color: #374151;
+  color: #3B82F6;
+  font-weight: 600;
+}
+
+/* Icon size adjustment for mobile */
+.main-tab i {
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+@media (min-width: 768px) {
+  .main-tab i {
+    font-size: 1.125rem;
+    margin-bottom: 0;
+    margin-right: 0.5rem;
+  }
+  
+  .main-tab {
+    flex-direction: row;
+  }
+}
+
+/* Adjust the content area to account for sticky header on mobile */
+@media (max-width: 768px) {
+  main {
+    padding-top: 0.25rem;
+  }
+  
+  .main-content {
+    margin-top: 0.5rem;
+  }
+}
+
+/* Optional: Add a subtle shadow to active tab for better visual feedback */
+.main-tab.active {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Optional: Add hover effect for desktop */
+@media (min-width: 769px) {
+  .main-tab:hover:not(.active) {
+    background-color: #4B5563;
+    color: #E5E7EB;
+  }
+}
+    .main-content {
+      display: none;
+    }
+    .main-content.active {
+      display: block;
+    }
+    
+    /* Media Source Tabs */
+    .media-source-tabs {
+      display: flex;
+      border-bottom: 1px solid #4B5563;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+    .media-source-tab {
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: #9CA3AF;
+      flex: 1;
+      min-width: 70px;
+      text-align: center;
+      transition: all 0.3s;
+      font-size: 0.75rem;
+    }
+    @media (min-width: 768px) {
+      .media-source-tab {
+        padding: 0.75rem 1rem;
+        min-width: 90px;
+        font-size: 0.875rem;
+      }
+    }
+    .media-source-tab.active {
+      border-bottom-color: #3B82F6;
+      color: #3B82F6;
+      background-color: #374151;
+    }
+    .media-source-content {
+      display: none;
+    }
+    .media-source-content.active {
+      display: block;
+    }
+    
+    /* Player styles */
+    .media-player {
+      max-width: 100%;
+      max-height: 500px;
+    }
+    #localFilePlayer, #directUrlPlayer, #embedPlayer, #youtubePlayer {
+      width: 100%;
+      height: 500px;
+    }
+    
+    #embedPlayer iframe,
+    #youtubePlayer iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 0.5rem;
+    }
+    
+    /* Custom fullscreen styles */
+    .media-player-container {
+      position: relative;
+      background: #000;
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    
+    .fullscreen-btn {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 1000;
+    }
+    
+    .fullscreen-btn:hover {
+      background: rgba(0,0,0,0.9);
+    }
+    
+    /* Status indicators */
+    .pulse-connecting { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%{opacity:1;} 50%{opacity:.5;} 100%{opacity:1;} }
+    
+    /* Mobile-specific adjustments */
+    @media (max-width: 768px) {
+      /* Make form inputs easier to tap */
+      input, select, button:not(.fullscreen-btn) {
+        min-height: 48px;
+      }
+      
+      /* Reduce padding on mobile */
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      /* Adjust spacing for better mobile flow */
+      .main-content > .bg-gray-800 {
+        padding: 1rem;
+      }
+      
+      /* Make control buttons more touch-friendly */
+      .bg-gray-700 .flex-wrap button,
+      .bg-gray-700 .grid button {
+        flex: 0 0 calc(50% - 0.375rem);
+        margin-bottom: 0.5rem;
+        text-align: center;
+        justify-content: center;
+      }
+      
+      /* Adjust media controls layout */
+      .media-player-container {
+        margin-bottom: 1rem;
+      }
+      
+      /* Make progress slider easier to use */
+      #mediaProgress {
+        height: 24px;
+        padding: 0;
+      }
+      
+      /* Adjust chat input */
+      #mediaChatInput {
+        font-size: 16px; /* Prevents iOS zoom on focus */
+      }
+      
+      /* Stack participants and chat sections */
+      .grid-cols-1 {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+    }
+    
+    /* Compact layout for very small screens */
+    @media (max-width: 480px) {
+      header .container {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+      }
+      
+      #connectionStatus {
+        justify-content: center;
+        width: 100%;
+      }
+      
+      /* Reduce font sizes slightly */
+      .text-2xl {
+        font-size: 1.5rem;
+      }
+      
+      .text-xl {
+        font-size: 1.25rem;
+      }
+      
+      /* Adjust button sizes */
+      button {
+        font-size: 0.875rem;
+      }
+    }
+    
+    /* Facebook 9:16 portrait player */
+    #embedPlayer.facebook-portrait {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+      aspect-ratio: 9 / 16;
+      height: auto !important;
+    }
+    #embedPlayer.facebook-portrait iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 0.5rem;
+    }
+    @media (max-width: 768px) {
+      #embedPlayer.facebook-portrait {
+        max-width: 280px;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white">
+  <header class="bg-gray-800 p-4 shadow-md">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold flex items-center">
+        <i class="fas fa-film mr-2 text-blue-400"></i> Family Media Sharing
+      </h1>
+      <div id="connectionStatus" class="flex items-center">
+        <span class="h-3 w-3 rounded-full bg-red-500 mr-2"></span>
+        <span>Not connected</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container mx-auto p-4">
+    <!-- Main Navigation Tabs -->
+    <div class="main-tabs">
+      <div class="main-tab active" data-tab="rooms">
+        <i class="fas fa-door-open mr-2"></i>Rooms
+      </div>
+      <div class="main-tab" data-tab="media">
+        <i class="fas fa-video mr-2"></i>Media Player
+      </div>
+      <div class="main-tab" data-tab="controls">
+        <i class="fas fa-sliders-h mr-2"></i>Controls
+      </div>
+      <div class="main-tab" data-tab="chat">
+        <i class="fas fa-comments mr-2"></i>Chat & Users
+      </div>
+    </div>
+
+    <!-- Rooms Tab -->
+    <div id="rooms-tab" class="main-content active">
+      <div class="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+        <!-- Media Room Connection -->
+        <div class="bg-gray-700 p-4 rounded-lg mb-6">
+          <h2 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fas fa-door-open mr-2 text-green-500"></i> Media Room
+          </h2>
+          
+          <!-- Room Type Selection -->
+          <div class="flex flex-col md:flex-row gap-2 md:gap-4 mb-4">
+            <button id="joinPublicRoomBtn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fas fa-users mr-2"></i> Join Public Room
+            </button>
+            <button id="createPrivateRoomBtn" class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fas fa-lock mr-2"></i> Create Private Room
+            </button>
+            <button id="joinPrivateRoomBtn" class="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+              <i class="fas fa-key mr-2"></i> Join Private Room
+            </button>
+          </div>
+
+          <!-- Public Room Section -->
+          <div id="publicRoomSection" class="mb-4 p-4 bg-blue-900/20 rounded-lg border border-blue-500/30">
+            <div class="flex items-center mb-2">
+              <i class="fas fa-info-circle text-blue-400 mr-2"></i>
+              <span class="text-blue-300 font-semibold text-sm md:text-base">Public Room - Anyone can join</span>
+            </div>
+            <div class="flex flex-col gap-3">
+              <input id="mediaRoomName" placeholder="Room name" value="public-lobby"
+                     class="p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <input id="mediaDisplayName" placeholder="Your name" value="User"
+                     class="p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <button id="joinMediaBtn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+                <i class="fas fa-sign-in-alt mr-2"></i> Join Room
+              </button>
+            </div>
+          </div>
+
+          <!-- Private Room Creation Section -->
+          <div id="privateRoomSection" class="hidden mb-4 p-4 bg-green-900/20 rounded-lg border border-green-500/30">
+            <div class="flex items-center mb-2">
+              <i class="fas fa-lock text-green-400 mr-2"></i>
+              <span class="text-green-300 font-semibold text-sm md:text-base">Create Private Room</span>
+            </div>
+            <div class="flex flex-col gap-3">
+              <input id="privateDisplayName" placeholder="Your name" value="User"
+                     class="p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <button id="createPrivateBtn" class="bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+                <i class="fas fa-plus mr-2"></i> Create Room
+              </button>
+            </div>
+            <div id="privateRoomInfo" class="hidden mt-3 p-3 bg-green-800/40 rounded-lg">
+              <div class="space-y-2">
+                <div class="text-green-300 font-semibold">Room Created!</div>
+                <p class="text-green-200 text-sm">Share this code with colleagues:</p>
+                <div id="roomCodeDisplay" class="text-xl md:text-2xl font-bold text-white bg-green-700 px-4 py-3 rounded-lg text-center"></div>
+                <button id="copyRoomCode" class="w-full text-sm text-green-300 hover:text-green-100 mt-1 flex items-center justify-center">
+                  <i class="fas fa-copy mr-1"></i> Copy Code
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Private Room Join Section -->
+          <div id="joinPrivateRoomSection" class="hidden mb-4 p-4 bg-purple-900/20 rounded-lg border border-purple-500/30">
+            <div class="flex items-center mb-2">
+              <i class="fas fa-key text-purple-400 mr-2"></i>
+              <span class="text-purple-300 font-semibold text-sm md:text-base">Join Private Room</span>
+            </div>
+            <div class="flex flex-col gap-3">
+              <input id="privateRoomCode" placeholder="Enter room code (e.g., QuickTeam123)" 
+                     class="p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <input id="privateJoinDisplayName" placeholder="Your name" value="User"
+                     class="p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <button id="joinPrivateRoomBtnAction" class="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center">
+                <i class="fas fa-sign-in-alt mr-2"></i> Join Room
+              </button>
+            </div>
+          </div>
+
+          <!-- Current Room Info -->
+          <div id="currentRoomInfo" class="hidden mb-4 p-3 bg-gray-800 rounded-lg border border-gray-600">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+              <div class="flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-white font-semibold truncate" id="currentRoomName"></span>
+                  <span id="roomPrivacyBadge" class="px-2 py-1 text-xs rounded-full whitespace-nowrap"></span>
+                </div>
+                <div class="text-gray-400 text-sm mt-1" id="roomStatusText"></div>
+              </div>
+              <button id="leaveMediaBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-semibold flex items-center justify-center min-w-[100px]">
+                <i class="fas fa-sign-out-alt mr-1"></i> Leave
+              </button>
+            </div>
+          </div>
+
+          <div id="mediaRoomStatus" class="flex items-center text-sm p-2 bg-gray-800/50 rounded-lg">
+            <span class="h-3 w-3 rounded-full bg-red-500 mr-2"></span>
+            <span>Not connected to media room</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Media Player Tab -->
+    <div id="media-tab" class="main-content">
+      <div class="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+        <!-- Media Source Tabs -->
+        <div class="bg-gray-700 p-4 rounded-lg mb-6">
+          <h2 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fas fa-video mr-2 text-blue-400"></i> Media Source
+          </h2>
+          
+          <div class="media-source-tabs">
+            <div class="media-source-tab active" data-source="youtube">
+              <i class="fab fa-youtube mr-1 md:mr-2"></i>YouTube
+            </div>
+            <div class="media-source-tab" data-source="direct-url">
+              <i class="fas fa-link mr-1 md:mr-2"></i>Direct URL
+            </div>
+            <div class="media-source-tab" data-source="embed">
+              <i class="fas fa-code mr-1 md:mr-2"></i>Embed
+            </div>
+            <div class="media-source-tab" data-source="local-file">
+              <i class="fas fa-file-video mr-1 md:mr-2"></i>Local File
+            </div>
+          </div>
+
+          <!-- YouTube Source -->
+          <div id="youtube-source" class="media-source-content active">
+            <div class="mb-4 space-y-3">
+              <input id="youtubeUrl" placeholder="Paste YouTube URL here" 
+                     class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <button id="loadYoutubeBtn" class="w-full bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+                <i class="fab fa-youtube mr-2"></i> Load YouTube Video
+              </button>
+            </div>
+            <div class="media-player-container bg-black rounded-lg overflow-hidden">
+              <div id="youtubePlayer" class="media-player">
+                <div class="text-center text-gray-400 py-8 md:py-16">
+                  <i class="fab fa-youtube text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                  <p class="text-base md:text-lg">Enter a YouTube URL to load a video</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Direct URL Source -->
+          <div id="direct-url-source" class="media-source-content">
+            <div class="mb-4 space-y-3">
+              <input id="directVideoUrl" placeholder="Paste direct video URL (MP4, WebM, etc.)" 
+                     class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
+                <strong>Supported formats:</strong> MP4, WebM, OGG, MOV, and other browser-supported video formats
+              </div>
+              <button id="loadDirectUrlBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+                <i class="fas fa-external-link-alt mr-2"></i> Load Video URL
+              </button>
+            </div>
+            <div class="media-player-container bg-black rounded-lg overflow-hidden relative">
+              <div id="directUrlPlayer" class="media-player">
+                <div class="text-center text-gray-400 py-8 md:py-16">
+                  <i class="fas fa-link text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                  <p class="text-base md:text-lg">Enter a direct video URL to load a video</p>
+                </div>
+              </div>
+              <button class="fullscreen-btn hidden" id="directUrlFullscreen">
+                <i class="fas fa-expand mr-1"></i> Fullscreen
+              </button>
+            </div>
+          </div>
+
+          <!-- Embed Video Source -->
+          <div id="embed-source" class="media-source-content">
+            <div class="mb-4 space-y-3">
+              <select id="embedPlatform" class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+                <option value="dailymotion">Dailymotion</option>
+                <option value="vimeo">Vimeo</option>
+                <option value="facebook">Facebook (Reels / Vertical 9:16)</option>
+                <option value="other">Other Platform</option>
+              </select>
+              <input id="embedVideoId" placeholder="Enter video ID or embed URL" 
+                     class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
+              <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
+                <strong>Dailymotion:</strong> Enter video ID (e.g., x8abcde from https://www.dailymotion.com/video/x8abcde)<br>
+                <strong>Vimeo:</strong> Enter video ID (e.g., 123456789 from https://vimeo.com/123456789)<br>
+                <strong>Facebook:</strong> Paste the full Facebook video/reel URL (e.g., https://www.facebook.com/reel/123456789). Displayed in 9:16 portrait format.<br>
+                <strong>Other:</strong> Paste full embed URL
+              </div>
+              <button id="loadEmbedBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+                <i class="fas fa-code mr-2"></i> Load Embed Video
+              </button>
+            </div>
+            <div class="media-player-container bg-black rounded-lg overflow-hidden">
+              <div id="embedPlayer" class="media-player">
+                <div class="text-center text-gray-400 py-8 md:py-16">
+                  <i class="fas fa-code text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                  <p class="text-base md:text-lg">Select a platform and enter video ID to load embedded video</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Local File Source -->
+          <div id="local-file-source" class="media-source-content">
+            <div class="mb-4 space-y-3">
+              <input type="file" id="localFileInput" accept="video/*,audio/*" 
+                     class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+              <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
+                <strong>Note:</strong> For local files to sync, all participants must have the same file. 
+                The host will share the file name and everyone needs to load it manually.
+              </div>
+              <button id="playLocalBtn" class="w-full bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+                <i class="fas fa-play mr-2"></i> Play Local File
+              </button>
+            </div>
+            <div class="media-player-container bg-black rounded-lg overflow-hidden relative">
+              <div id="localFilePlayer" class="media-player">
+                <div class="text-center text-gray-400 py-8 md:py-16">
+                  <i class="fas fa-file-video text-4xl md:text-5xl mb-3 md:mb-4"></i>
+                  <p class="text-base md:text-lg">Select a video or audio file to play</p>
+                </div>
+              </div>
+              <button class="fullscreen-btn hidden" id="localFileFullscreen">
+                <i class="fas fa-expand mr-1"></i> Fullscreen
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls Tab -->
+    <div id="controls-tab" class="main-content">
+      <div class="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+        <!-- Media Controls -->
+        <div class="bg-gray-700 p-4 rounded-lg mb-6">
+          <h2 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fas fa-sliders-h mr-2 text-blue-400"></i> Media Controls
+          </h2>
+          <div class="grid grid-cols-2 md:flex md:flex-wrap gap-2 md:gap-3 mb-4">
+            <button id="playMediaBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+              <i class="fas fa-play mr-2"></i> Play
+            </button>
+            <button id="pauseMediaBtn" class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 md:px-4 py-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+              <i class="fas fa-pause mr-2"></i> Pause
+            </button>
+            <button id="stopMediaBtn" class="bg-red-600 hover:bg-red-700 text-white px-3 md:px-4 py-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+              <i class="fas fa-stop mr-2"></i> Stop
+            </button>
+            <button id="syncMediaBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 md:px-4 py-3 rounded-lg font-semibold flex items-center justify-center" disabled>
+              <i class="fas fa-sync mr-2"></i> Sync
+            </button>
+            <button id="becomeHostBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-3 rounded-lg font-semibold flex items-center justify-center col-span-2 md:col-span-1" disabled>
+              <i class="fas fa-crown mr-2"></i> Become Host
+            </button>
+          </div>
+          <div class="mt-4">
+            <label for="mediaProgress" class="block text-sm font-medium mb-2">Progress</label>
+            <input type="range" id="mediaProgress" min="0" max="100" value="0" 
+                   class="w-full h-2 md:h-3 bg-gray-600 rounded-lg appearance-none cursor-pointer" disabled>
+            <div class="flex justify-between text-sm text-gray-400 mt-2">
+              <span id="currentTime">0:00</span>
+              <span id="duration">0:00</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Connection Status Card -->
+        <div class="bg-gray-700 p-4 rounded-lg">
+          <h2 class="text-xl font-semibold mb-4 flex items-center">
+            <i class="fas fa-network-wired mr-2 text-blue-400"></i> Connection Status
+          </h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <span class="font-medium">Server Connection:</span>
+              <div class="flex items-center">
+                <span id="serverStatusIndicator" class="h-3 w-3 rounded-full bg-red-500 mr-2"></span>
+                <span id="serverStatusText">Disconnected</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <span class="font-medium">Room Connection:</span>
+              <div class="flex items-center">
+                <span id="roomStatusIndicator" class="h-3 w-3 rounded-full bg-red-500 mr-2"></span>
+                <span id="roomStatusText">Not in a room</span>
+              </div>
+            </div>
+            <div class="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <span class="font-medium">Host Status:</span>
+              <span id="hostStatusText" class="text-gray-400">Not a host</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat & Users Tab -->
+    <div id="chat-tab" class="main-content">
+      <div class="bg-gray-800 p-4 md:p-6 rounded-lg shadow-lg">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Media Participants -->
+          <div class="bg-gray-700 p-4 rounded-lg order-2 lg:order-1">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+              <i class="fas fa-users mr-2 text-blue-400"></i> Room Participants
+            </h2>
+            <div id="mediaParticipants" class="space-y-2 max-h-60 overflow-y-auto">
+              <div class="text-center text-gray-400 py-8">
+                <i class="fas fa-users text-3xl mb-2"></i>
+                <p>No participants in room</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Media Chat -->
+          <div class="bg-gray-700 p-4 rounded-lg flex flex-col order-1 lg:order-2">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+              <i class="fas fa-comments mr-2 text-blue-400"></i> Media Chat
+            </h2>
+            <div id="mediaChatMessages" class="flex-1 overflow-y-auto mb-3 p-3 bg-gray-800 rounded-lg min-h-[300px] md:min-h-[400px]">
+              <div class="text-center text-gray-400 py-8">
+                <i class="fas fa-comments text-3xl mb-2"></i>
+                <p>No messages yet</p>
+              </div>
+            </div>
+            <div class="flex">
+              <input id="mediaChatInput" placeholder="Type your message..." disabled
+                     class="flex-1 p-3 bg-gray-600 border border-gray-500 rounded-l-lg">
+              <button id="sendMediaChatBtn" class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-r-lg font-semibold flex items-center justify-center min-w-[60px]" disabled>
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    // Socket connection - NO CHANGES HERE
+    const socket = io();
+
+    // DOM Elements - Keep all your existing element references
+    const mediaRoomName = document.getElementById('mediaRoomName');
+    const mediaDisplayName = document.getElementById('mediaDisplayName');
+    const joinMediaBtn = document.getElementById('joinMediaBtn');
+    const leaveMediaBtn = document.getElementById('leaveMediaBtn');
+    const mediaRoomStatus = document.getElementById('mediaRoomStatus');
+    const connectionStatus = document.getElementById('connectionStatus');
+    const mediaParticipants = document.getElementById('mediaParticipants');
+    const youtubeUrl = document.getElementById('youtubeUrl');
+    const loadYoutubeBtn = document.getElementById('loadYoutubeBtn');
+    const youtubePlayer = document.getElementById('youtubePlayer');
+    const localFileInput = document.getElementById('localFileInput');
+    const playLocalBtn = document.getElementById('playLocalBtn');
+    const localFilePlayer = document.getElementById('localFilePlayer');
+    const playMediaBtn = document.getElementById('playMediaBtn');
+    const pauseMediaBtn = document.getElementById('pauseMediaBtn');
+    const stopMediaBtn = document.getElementById('stopMediaBtn');
+    const syncMediaBtn = document.getElementById('syncMediaBtn');
+    const becomeHostBtn = document.getElementById('becomeHostBtn');
+    const mediaProgress = document.getElementById('mediaProgress');
+    const currentTime = document.getElementById('currentTime');
+    const duration = document.getElementById('duration');
+    const mediaChatMessages = document.getElementById('mediaChatMessages');
+    const mediaChatInput = document.getElementById('mediaChatInput');
+    const sendMediaChatBtn = document.getElementById('sendMediaChatBtn');
+    const roomStatusText = document.getElementById('roomStatusText');
+    
+    // Status indicators for controls tab
+    const serverStatusIndicator = document.getElementById('serverStatusIndicator');
+    const serverStatusText = document.getElementById('serverStatusText');
+    const roomStatusIndicator = document.getElementById('roomStatusIndicator');
+    const hostStatusText = document.getElementById('hostStatusText');
+
+    // Media Source Elements
+    const mediaSourceTabs = document.querySelectorAll('.media-source-tab');
+    const mediaSourceContents = document.querySelectorAll('.media-source-content');
+    const directVideoUrl = document.getElementById('directVideoUrl');
+    const loadDirectUrlBtn = document.getElementById('loadDirectUrlBtn');
+    const directUrlPlayer = document.getElementById('directUrlPlayer');
+    const embedPlatform = document.getElementById('embedPlatform');
+    const embedVideoId = document.getElementById('embedVideoId');
+    const loadEmbedBtn = document.getElementById('loadEmbedBtn');
+    const embedPlayer = document.getElementById('embedPlayer');
+
+    // Fullscreen buttons
+    const directUrlFullscreen = document.getElementById('directUrlFullscreen');
+    const localFileFullscreen = document.getElementById('localFileFullscreen');
+
+    // New DOM Elements for room management
+    const joinPublicRoomBtn = document.getElementById('joinPublicRoomBtn');
+    const createPrivateRoomBtn = document.getElementById('createPrivateRoomBtn');
+    const joinPrivateRoomBtn = document.getElementById('joinPrivateRoomBtn');
+    const publicRoomSection = document.getElementById('publicRoomSection');
+    const privateRoomSection = document.getElementById('privateRoomSection');
+    const joinPrivateRoomSection = document.getElementById('joinPrivateRoomSection');
+    const privateDisplayName = document.getElementById('privateDisplayName');
+    const createPrivateBtn = document.getElementById('createPrivateBtn');
+    const privateRoomInfo = document.getElementById('privateRoomInfo');
+    const roomCodeDisplay = document.getElementById('roomCodeDisplay');
+    const copyRoomCode = document.getElementById('copyRoomCode');
+    const currentRoomInfo = document.getElementById('currentRoomInfo');
+    const currentRoomName = document.getElementById('currentRoomName');
+    const roomPrivacyBadge = document.getElementById('roomPrivacyBadge');
+    const privateRoomCode = document.getElementById('privateRoomCode');
+    const privateJoinDisplayName = document.getElementById('privateJoinDisplayName');
+    const joinPrivateRoomBtnAction = document.getElementById('joinPrivateRoomBtnAction');
+
+    // Main Navigation Tabs
+    const mainTabs = document.querySelectorAll('.main-tab');
+    const mainContents = document.querySelectorAll('.main-content');
+
+    // State variables - NO CHANGES HERE
+    let youtubePlayerObj = null;
+    let localMediaPlayer = null;
+    let directUrlMediaPlayer = null;
+    let currentMediaType = null;
+    let isMediaHost = false;
+    let currentMediaRoom = null;
+    let mediaSyncInterval = null;
+    let mediaDisplayNameValue = 'User';
+    let lastSyncTime = 0;
+    const mediaRoomUsers = new Map();
+    const SYNC_THRESHOLD = 2; // Sync if difference is more than 2 seconds
+
+    // Embed video tracking
+    window.embedIsPlaying = false;
+    window.embedSimulatedTime = 0;
+    window.embedLastUpdate = Date.now();
+
+    // ========== NEW: Main Tab Switching ==========
+    mainTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabId = tab.getAttribute('data-tab');
+        
+        // Update active tab
+        mainTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Show corresponding content
+        mainContents.forEach(content => {
+          content.classList.remove('active');
+        });
+        document.getElementById(`${tabId}-tab`).classList.add('active');
+      });
+    });
+
+    // ========== NEW: Update Status Indicators ==========
+    function updateStatusIndicators() {
+      // Server connection status
+      if (socket.connected) {
+        serverStatusIndicator.className = 'h-3 w-3 rounded-full bg-green-500 mr-2';
+        serverStatusText.textContent = 'Connected';
+      } else {
+        serverStatusIndicator.className = 'h-3 w-3 rounded-full bg-red-500 mr-2 pulse-connecting';
+        serverStatusText.textContent = 'Connecting...';
+      }
+      
+      // Room status
+      if (currentMediaRoom) {
+        roomStatusIndicator.className = 'h-3 w-3 rounded-full bg-green-500 mr-2';
+        roomStatusText.textContent = `In room: ${currentMediaRoom}`;
+      } else {
+        roomStatusIndicator.className = 'h-3 w-3 rounded-full bg-red-500 mr-2';
+        roomStatusText.textContent = 'Not in a room';
+      }
+      
+      // Host status
+      hostStatusText.textContent = isMediaHost ? 'You are the host' : 'Not a host';
+      hostStatusText.className = isMediaHost ? 'text-yellow-400 font-semibold' : 'text-gray-400';
+    }
+
+    // ========== MODIFIED: Update connection status functions ==========
+    function updateConnectionStatus(status) {
+      const indicator = connectionStatus.querySelector('.h-3');
+      const text = connectionStatus.querySelector('span:last-child');
+      
+      indicator.className = 'h-3 w-3 rounded-full mr-2 ' +
+        (status === 'connected' ? 'bg-green-500' : 
+         status === 'connecting' ? 'bg-yellow-500 pulse-connecting' : 'bg-red-500');
+      
+      text.textContent = 
+        status === 'connected' ? `Connected to ${currentMediaRoom}` :
+        status === 'connecting' ? 'Connecting...' : 'Not connected';
+      
+      // Also update status indicators
+      updateStatusIndicators();
+    }
+
+    function updateMediaRoomStatus(status) {
+      const indicator = mediaRoomStatus.querySelector('.h-3');
+      const text = mediaRoomStatus.querySelector('span:last-child');
+      
+      indicator.className = 'h-3 w-3 rounded-full mr-2 ' +
+        (status === 'connected' ? 'bg-green-500' : 
+         status === 'connecting' ? 'bg-yellow-500 pulse-connecting' : 'bg-red-500');
+      
+      text.textContent = 
+        status === 'connected' ? `Connected to ${currentMediaRoom} (${isMediaHost ? 'Host' : 'Participant'})` :
+        status === 'connecting' ? 'Connecting to media room...' : 'Not connected to media room';
+      
+      // Update room status text
+      if (roomStatusText) {
+        roomStatusText.textContent = isMediaHost ? 'You are the host' : 'Connected as participant';
+      }
+      
+      // Update status indicators
+      updateStatusIndicators();
+    }
+
+    // ========== KEEP ALL YOUR EXISTING FUNCTIONS EXACTLY AS THEY ARE ==========
+    // From this point on, all your existing JavaScript code remains exactly the same
+    // Only the tab navigation and status indicator updates are new
+    
+    // Room type selection
+    joinPublicRoomBtn.addEventListener('click', () => {
+      publicRoomSection.classList.remove('hidden');
+      privateRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
+    });
+
+    createPrivateRoomBtn.addEventListener('click', () => {
+      privateRoomSection.classList.remove('hidden');
+      publicRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
+    });
+
+    joinPrivateRoomBtn.addEventListener('click', () => {
+      joinPrivateRoomSection.classList.remove('hidden');
+      publicRoomSection.classList.add('hidden');
+      privateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
+    });
+
+    // Create private room
+    createPrivateBtn.addEventListener('click', () => {
+      const displayName = privateDisplayName.value.trim() || 'User';
+      socket.emit('create-private-room', displayName);
+    });
+
+    // Handle private room creation
+    socket.on('private-room-created', (roomCode, users) => {
+      currentMediaRoom = roomCode;
+      mediaDisplayNameValue = privateDisplayName.value.trim() || 'User';
+      
+      // Update UI
+      privateRoomInfo.classList.remove('hidden');
+      roomCodeDisplay.textContent = roomCode;
+      currentRoomInfo.classList.remove('hidden');
+      currentRoomName.textContent = roomCode;
+      roomPrivacyBadge.textContent = '🔒 Private';
+      roomPrivacyBadge.className = 'px-2 py-1 text-xs rounded-full bg-green-600 text-white';
+      
+      // Update participants
+      mediaRoomUsers.clear();
+      users.forEach(user => {
+        mediaRoomUsers.set(user.id, user);
+      });
+      
+      isMediaHost = true;
+      updateMediaRoomStatus('connected');
+      updateConnectionStatus('connected');
+      updateMediaParticipants();
+      
+      // Enable media controls
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+        btn.disabled = false;
+      });
+      
+      becomeHostBtn.disabled = true;
+      addMediaChatMessage('System', 'Private room created! You are the host. Share the room code with colleagues.', 'incoming');
+      
+      // Switch to media tab for better UX
+      setTimeout(() => {
+        document.querySelector('.main-tab[data-tab="media"]').click();
+      }, 500);
+    });
+
+    // Join private room
+    joinPrivateRoomBtnAction.addEventListener('click', () => {
+      const roomCode = privateRoomCode.value.trim();
+      const displayName = privateJoinDisplayName.value.trim() || 'User';
+      
+      if (!roomCode) {
+        alert('Please enter a room code');
+        return;
+      }
+      
+      currentMediaRoom = roomCode;
+      mediaDisplayNameValue = displayName;
+      
+      socket.emit('join-media-room', roomCode, displayName);
+      
+      // Disable inputs while connecting
+      privateRoomCode.disabled = true;
+      privateJoinDisplayName.disabled = true;
+      joinPrivateRoomBtnAction.disabled = true;
+      
+      updateMediaRoomStatus('connecting');
+      updateConnectionStatus('connecting');
+    });
+
+    // Copy room code
+    copyRoomCode.addEventListener('click', () => {
+      navigator.clipboard.writeText(roomCodeDisplay.textContent).then(() => {
+        const originalText = copyRoomCode.innerHTML;
+        copyRoomCode.innerHTML = '<i class="fas fa-check mr-1"></i> Copied!';
+        setTimeout(() => {
+          copyRoomCode.innerHTML = originalText;
+        }, 2000);
+      });
+    });
+
+    // Handle room errors
+    socket.on('room-error', (data) => {
+      alert(data.message);
+      // Re-enable inputs
+      privateRoomCode.disabled = false;
+      privateJoinDisplayName.disabled = false;
+      joinPrivateRoomBtnAction.disabled = false;
+    });
+
+    // Media Source Tab Switching
+    mediaSourceTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const source = tab.getAttribute('data-source');
+        
+        // Update active tab
+        mediaSourceTabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Show corresponding content
+        mediaSourceContents.forEach(content => {
+          content.classList.remove('active');
+        });
+        document.getElementById(`${source}-source`).classList.add('active');
+      });
+    });
+
+    // Media Room Connection
+    joinMediaBtn.addEventListener('click', () => {
+      const room = mediaRoomName.value.trim().toLowerCase();
+      if (!room) {
+        alert('Please enter a room name');
+        return;
+      }
+      
+      mediaDisplayNameValue = mediaDisplayName.value.trim() || `User${Math.random().toString(36).substr(2, 5)}`;
+      currentMediaRoom = room;
+      
+      socket.emit('join-media-room', room, mediaDisplayNameValue);
+      
+      joinMediaBtn.disabled = true;
+      mediaRoomName.disabled = true;
+      mediaDisplayName.disabled = true;
+      leaveMediaBtn.disabled = false;
+      
+      updateMediaRoomStatus('connecting');
+      updateConnectionStatus('connecting');
+    });
+
+    leaveMediaBtn.addEventListener('click', () => {
+      leaveMediaRoom();
+    });
+
+    function leaveMediaRoom() {
+      if (currentMediaRoom) {
+        socket.emit('leave-media-room', currentMediaRoom);
+      }
+      
+      // Re-enable ALL inputs
+      mediaRoomName.disabled = false;
+      mediaDisplayName.disabled = false;
+      privateRoomCode.disabled = false;
+      privateJoinDisplayName.disabled = false;
+      joinPrivateRoomBtnAction.disabled = false;
+      joinMediaBtn.disabled = false;
+      
+      // Hide room info and show public room by default
+      currentRoomInfo.classList.add('hidden');
+      publicRoomSection.classList.remove('hidden');
+      privateRoomSection.classList.add('hidden');
+      joinPrivateRoomSection.classList.add('hidden');
+      privateRoomInfo.classList.add('hidden');
+      
+      // Reset media state
+      stopMediaSync();
+      if (youtubePlayerObj) {
+        youtubePlayerObj.destroy();
+        youtubePlayerObj = null;
+      }
+      if (localMediaPlayer) {
+        localMediaPlayer.pause();
+        localMediaPlayer = null;
+      }
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.pause();
+        directUrlMediaPlayer = null;
+      }
+      
+      // Reset embed tracking
+      window.embedIsPlaying = false;
+      window.embedSimulatedTime = 0;
+      
+      // Reset players
+      resetAllPlayers();
+      
+      mediaParticipants.innerHTML = `
+        <div class="text-center text-gray-400 py-8">
+          <i class="fas fa-users text-3xl mb-2"></i>
+          <p>No participants in room</p>
+        </div>
+      `;
+      
+      mediaChatMessages.innerHTML = `
+        <div class="text-center text-gray-400 py-8">
+          <i class="fas fa-comments text-3xl mb-2"></i>
+          <p>No messages yet</p>
+        </div>
+      `;
+      
+      // Disable all controls
+      disableAllControls();
+      
+      leaveMediaBtn.disabled = true;
+      
+      updateMediaRoomStatus('disconnected');
+      updateConnectionStatus('disconnected');
+      currentMediaRoom = null;
+      isMediaHost = false;
+      mediaRoomUsers.clear();
+      updateStatusIndicators();
+    }
+
+    function resetAllPlayers() {
+      youtubePlayer.innerHTML = `
+        <div class="text-center text-gray-400 py-8 md:py-16">
+          <i class="fab fa-youtube text-4xl md:text-5xl mb-3 md:mb-4"></i>
+          <p class="text-base md:text-lg">Enter a YouTube URL to load a video</p>
+        </div>
+      `;
+      
+      directUrlPlayer.innerHTML = `
+        <div class="text-center text-gray-400 py-8 md:py-16">
+          <i class="fas fa-link text-4xl md:text-5xl mb-3 md:mb-4"></i>
+          <p class="text-base md:text-lg">Enter a direct video URL to load a video</p>
+        </div>
+      `;
+      directUrlFullscreen.classList.add('hidden');
+      
+      embedPlayer.innerHTML = `
+        <div class="text-center text-gray-400 py-8 md:py-16">
+          <i class="fas fa-code text-4xl md:text-5xl mb-3 md:mb-4"></i>
+          <p class="text-base md:text-lg">Select a platform and enter video ID to load embedded video</p>
+        </div>
+      `;
+      
+      localFilePlayer.innerHTML = `
+        <div class="text-center text-gray-400 py-8 md:py-16">
+          <i class="fas fa-file-video text-4xl md:text-5xl mb-3 md:mb-4"></i>
+          <p class="text-base md:text-lg">Select a video or audio file to play</p>
+        </div>
+      `;
+      localFileFullscreen.classList.add('hidden');
+      
+      mediaProgress.value = 0;
+      currentTime.textContent = '0:00';
+      duration.textContent = '0:00';
+    }
+
+    function disableAllControls() {
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, playMediaBtn, 
+       pauseMediaBtn, stopMediaBtn, syncMediaBtn, becomeHostBtn, mediaChatInput, 
+       sendMediaChatBtn].forEach(btn => {
+        btn.disabled = true;
+      });
+      mediaProgress.disabled = true;
+    }
+
+    function updateMediaParticipants() {
+      mediaParticipants.innerHTML = '';
+      
+      if (mediaRoomUsers.size === 0) {
+        mediaParticipants.innerHTML = `
+          <div class="text-center text-gray-400 py-8">
+            <i class="fas fa-users text-3xl mb-2"></i>
+            <p>No participants in room</p>
+          </div>
+        `;
+        return;
+      }
+      
+      mediaRoomUsers.forEach((user, userId) => {
+        const participant = document.createElement('div');
+        participant.className = 'bg-gray-600 px-4 py-3 rounded-lg flex items-center justify-between';
+        participant.innerHTML = `
+          <div class="flex items-center">
+            <span class="h-2 w-2 rounded-full bg-green-500 mr-3"></span>
+            <span class="font-medium">${user.displayName}</span>
+            ${userId === socket.id ? '<span class="ml-2 text-blue-400 text-sm">(You)</span>' : ''}
+          </div>
+          ${user.isHost ? '<i class="fas fa-crown text-yellow-400 text-lg"></i>' : ''}
+        `;
+        mediaParticipants.appendChild(participant);
+      });
+    }
+
+    // Add this function to handle room state
+    function handleRoomState(mediaState) {
+      if (!mediaState) {
+        console.log('No media state available in room');
+        return;
+      }
+      
+      console.log('Loading room media state:', mediaState);
+      
+      // Load the appropriate media based on state
+      switch (mediaState.type) {
+        case 'load-youtube':
+          if (mediaState.videoId) {
+            loadYouTubeVideo(mediaState.videoId, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's YouTube video`, 'incoming');
+          }
+          break;
+          
+        case 'load-direct-url':
+          if (mediaState.url) {
+            loadDirectUrlVideo(mediaState.url, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's video URL`, 'incoming');
+          }
+          break;
+          
+        case 'load-embed':
+          if (mediaState.platform && mediaState.videoId) {
+            loadEmbedVideo(mediaState.platform, mediaState.videoId, mediaState.startTime || 0);
+            addMediaChatMessage('System', `Synced to host's embedded video`, 'incoming');
+          }
+          break;
+          
+        case 'load-local-file':
+          if (mediaState.fileName) {
+            addMediaChatMessage('System', `Host is playing: ${mediaState.fileName}. Please load the same file to sync.`, 'incoming');
+          }
+          break;
+      }
+    }
+
+    // Socket event handlers
+    socket.on('media-room-joined', (users, hostId, mediaState, privacyInfo) => {
+      console.log('Media room joined, privacy:', privacyInfo);
+      
+      users.forEach(user => {
+        mediaRoomUsers.set(user.id, user);
+      });
+      
+      isMediaHost = hostId === socket.id;
+      updateMediaRoomStatus('connected');
+      updateConnectionStatus('connected');
+      updateMediaParticipants();
+      
+      // Show current room info
+      currentRoomInfo.classList.remove('hidden');
+      currentRoomName.textContent = currentMediaRoom;
+      
+      if (privacyInfo && !privacyInfo.isPublic) {
+        roomPrivacyBadge.textContent = '🔒 Private';
+        roomPrivacyBadge.className = 'ml-2 px-2 py-1 text-xs rounded-full bg-green-600 text-white';
+      } else {
+        roomPrivacyBadge.textContent = '🌐 Public';
+        roomPrivacyBadge.className = 'ml-2 px-2 py-1 text-xs rounded-full bg-blue-600 text-white';
+      }
+      
+      // Enable media controls
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+        btn.disabled = false;
+      });
+      
+      // Handle existing media state if this is a new joiner
+      if (mediaState && !isMediaHost) {
+        setTimeout(() => {
+          handleRoomState(mediaState);
+        }, 1000);
+      }
+      
+      if (isMediaHost) {
+        becomeHostBtn.disabled = true;
+        addMediaChatMessage('System', 'You are the media host. You can control playback for everyone.', 'incoming');
+      } else {
+        becomeHostBtn.disabled = false;
+        addMediaChatMessage('System', `Connected to media room. ${mediaRoomUsers.get(hostId)?.displayName || 'Someone'} is the host.`, 'incoming');
+      }
+      
+      // Switch to media tab for better UX
+      setTimeout(() => {
+        document.querySelector('.main-tab[data-tab="media"]').click();
+      }, 500);
+    });
+
+    // Add this new event handler for manual state requests
+    socket.on('room-state', (data) => {
+      if (data.room === currentMediaRoom) {
+        handleRoomState(data.mediaState);
+      }
+    });
+
+    socket.on('media-user-connected', (userData) => {
+      console.log('New user joined media room:', userData);
+      mediaRoomUsers.set(userData.id, userData);
+      updateMediaParticipants();
+      addMediaChatMessage('System', `${userData.displayName} joined the media room`, 'incoming');
+    });
+
+    socket.on('media-user-disconnected', (userId) => {
+      console.log('User left media room:', userId);
+      const userName = mediaRoomUsers.get(userId)?.displayName || 'User';
+      mediaRoomUsers.delete(userId);
+      updateMediaParticipants();
+      addMediaChatMessage('System', `${userName} left the media room`, 'incoming');
+      
+      // If host left, allow someone else to become host
+      if (mediaRoomUsers.size > 0) {
+        const anyHost = Array.from(mediaRoomUsers.values()).some(user => user.isHost);
+        if (!anyHost) {
+          addMediaChatMessage('System', 'Host left. Click "Become Host" to take control.', 'incoming');
+          becomeHostBtn.disabled = false;
+        }
+      }
+    });
+
+    socket.on('media-host-changed', (newHostId) => {
+      // Update all users' host status
+      mediaRoomUsers.forEach((user, userId) => {
+        user.isHost = userId === newHostId;
+      });
+      
+      isMediaHost = newHostId === socket.id;
+      updateMediaRoomStatus('connected');
+      updateMediaParticipants();
+      updateStatusIndicators();
+      
+      if (isMediaHost) {
+        becomeHostBtn.disabled = true;
+        addMediaChatMessage('System', 'You are now the media host!', 'incoming');
+      } else {
+        const hostName = mediaRoomUsers.get(newHostId)?.displayName || 'Someone';
+        addMediaChatMessage('System', `${hostName} is now the media host`, 'incoming');
+      }
+    });
+
+    // YouTube Player API
+    function onYouTubeIframeAPIReady() {
+      console.log('YouTube IFrame API is ready');
+    }
+
+    function extractYouTubeId(url) {
+      const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[7].length === 11) ? match[7] : null;
+    }
+
+    loadYoutubeBtn.addEventListener('click', () => {
+      const url = youtubeUrl.value.trim();
+      if (!url) {
+        alert('Please enter a YouTube URL');
+        return;
+      }
+      
+      const videoId = extractYouTubeId(url);
+      if (!videoId) {
+        alert('Invalid YouTube URL');
+        return;
+      }
+      
+      loadYouTubeVideo(videoId);
+    });
+
+    function loadYouTubeVideo(videoId, startTime = 0) {
+      if (youtubePlayerObj) {
+        youtubePlayerObj.destroy();
+      }
+      
+      youtubePlayer.innerHTML = `<div id="yt-player"></div>`;
+      
+      // Set consistent height for all players
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      
+      youtubePlayerObj = new YT.Player('yt-player', {
+        height: playerHeight.toString(),
+        width: '100%',
+        videoId: videoId,
+        playerVars: {
+          'playsinline': 1,
+          'enablejsapi': 1,
+          'origin': window.location.origin,
+          'start': startTime,
+          'rel': 0,
+          'modestbranding': 1,
+          'fs': 1 // Enable fullscreen
+        },
+        events: {
+          'onReady': onYouTubePlayerReady,
+          'onStateChange': onYouTubePlayerStateChange
+        }
+      });
+      
+      currentMediaType = 'youtube';
+      enableMediaControls();
+      addMediaChatMessage('System', `Loaded YouTube video`, 'incoming');
+      
+      if (isMediaHost && currentMediaRoom) {
+        socket.emit('media-control', {
+          room: currentMediaRoom,
+          type: 'load-youtube',
+          mediaType: 'youtube',
+          videoId: videoId,
+          startTime: startTime
+        });
+      }
+    }
+
+    function onYouTubePlayerReady(event) {
+      console.log('YouTube player ready');
+      duration.textContent = formatTime(youtubePlayerObj.getDuration());
+      enableMediaControls();
+    }
+
+    function onYouTubePlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        startMediaSync();
+      } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+        stopMediaSync();
+      }
+      
+      if (event.data === YT.PlayerState.PLAYING) {
+        updateYouTubeProgress();
+      }
+    }
+
+    function updateYouTubeProgress() {
+      if (youtubePlayerObj && youtubePlayerObj.getPlayerState() === YT.PlayerState.PLAYING) {
+        const current = youtubePlayerObj.getCurrentTime();
+        const total = youtubePlayerObj.getDuration();
+        const progress = (current / total) * 100;
+        
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(current);
+        
+        setTimeout(updateYouTubeProgress, 100);
+      }
+    }
+
+    // Direct URL Video Loading
+    loadDirectUrlBtn.addEventListener('click', () => {
+      const url = directVideoUrl.value.trim();
+      if (!url) {
+        alert('Please enter a video URL');
+        return;
+      }
+      
+      try {
+        new URL(url);
+      } catch (e) {
+        alert('Please enter a valid URL');
+        return;
+      }
+      
+      loadDirectUrlVideo(url);
+    });
+
+    function loadDirectUrlVideo(url, startTime = 0) {
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.pause();
+        directUrlMediaPlayer = null;
+      }
+      
+      directUrlPlayer.innerHTML = '';
+      
+      directUrlMediaPlayer = document.createElement('video');
+      directUrlMediaPlayer.controls = true;
+      directUrlMediaPlayer.className = 'w-full h-full object-contain';
+      directUrlMediaPlayer.src = url;
+      
+      // Set consistent height
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      directUrlMediaPlayer.style.height = `${playerHeight}px`;
+      
+      // Improved audio-video sync
+      directUrlMediaPlayer.preload = 'auto';
+      directUrlMediaPlayer.crossOrigin = 'anonymous';
+      
+      directUrlPlayer.appendChild(directUrlMediaPlayer);
+      directUrlFullscreen.classList.remove('hidden');
+      
+      directUrlMediaPlayer.addEventListener('loadedmetadata', () => {
+        duration.textContent = formatTime(directUrlMediaPlayer.duration);
+        enableMediaControls();
+        
+        if (startTime > 0) {
+          directUrlMediaPlayer.currentTime = startTime;
+        }
+      });
+      
+      directUrlMediaPlayer.addEventListener('timeupdate', () => {
+        const progress = (directUrlMediaPlayer.currentTime / directUrlMediaPlayer.duration) * 100;
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(directUrlMediaPlayer.currentTime);
+      });
+      
+      directUrlMediaPlayer.addEventListener('play', () => {
+        startMediaSync();
+      });
+      
+      directUrlMediaPlayer.addEventListener('pause', () => {
+        stopMediaSync();
+      });
+      
+      directUrlMediaPlayer.addEventListener('ended', () => {
+        stopMediaSync();
+      });
+      
+      // Handle seeking for better sync
+      directUrlMediaPlayer.addEventListener('seeked', () => {
+        if (isMediaHost && currentMediaRoom) {
+          socket.emit('media-control', {
+            room: currentMediaRoom,
+            type: 'seek',
+            time: directUrlMediaPlayer.currentTime
+          });
+        }
+      });
+      
+      currentMediaType = 'direct-url';
+      enableMediaControls();
+      addMediaChatMessage('System', `Loaded direct URL video`, 'incoming');
+      
+      if (isMediaHost && currentMediaRoom) {
+        socket.emit('media-control', {
+          room: currentMediaRoom,
+          type: 'load-direct-url',
+          mediaType: 'direct-url',
+          url: url,
+          startTime: startTime
+        });
+      }
+    }
+
+    // Enhanced embed video loading with better sync
+    function loadEmbedVideo(platform, videoId, startTime = 0) {
+      let embedUrl = '';
+      let displayName = '';
+      const isFacebook = platform === 'facebook';
+      
+      switch (platform) {
+        case 'dailymotion':
+          embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&api=postMessage&autoplay=1&mute=0`;
+          displayName = 'Dailymotion';
+          break;
+        case 'vimeo':
+          embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+          displayName = 'Vimeo';
+          break;
+        case 'facebook':
+          embedUrl = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(videoId)}&show_text=false&autoplay=true&allowfullscreen=true`;
+          displayName = 'Facebook';
+          break;
+        case 'other':
+          embedUrl = videoId;
+          displayName = 'Embedded';
+          break;
+      }
+      
+      // Apply or remove the 9:16 portrait class for Facebook
+      if (isFacebook) {
+        embedPlayer.classList.add('facebook-portrait');
+        embedPlayer.style.height = '';
+      } else {
+        embedPlayer.classList.remove('facebook-portrait');
+      }
+
+      embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      
+      // Set consistent height (skip for Facebook which uses aspect-ratio CSS)
+      if (!isFacebook) {
+        const playerHeight = window.innerWidth < 768 ? 300 : 500;
+        const iframe = embedPlayer.querySelector('iframe');
+        if (iframe) {
+          iframe.style.height = `${playerHeight}px`;
+        }
+      }
+      
+      currentMediaType = 'embed';
+      enableMediaControls();
+      addMediaChatMessage('System', `Loaded ${displayName} video`, 'incoming');
+      
+      // Reset embed tracking
+      window.embedSimulatedTime = startTime || 0;
+      window.embedLastUpdate = Date.now();
+      window.embedIsPlaying = false;
+      
+      // Start sync after a short delay to let the embed load
+      setTimeout(() => {
+        if (isMediaHost) {
+          startMediaSync();
+        }
+      }, 2000);
+      
+      if (isMediaHost && currentMediaRoom) {
+        socket.emit('media-control', {
+          room: currentMediaRoom,
+          type: 'load-embed',
+          mediaType: 'embed',
+          platform: platform,
+          videoId: videoId,
+          startTime: startTime
+        });
+      }
+    }
+
+    // Embed Video Loading
+    loadEmbedBtn.addEventListener('click', () => {
+      const platform = embedPlatform.value;
+      const videoId = embedVideoId.value.trim();
+      
+      if (!videoId) {
+        alert('Please enter a video ID or URL');
+        return;
+      }
+      
+      loadEmbedVideo(platform, videoId);
+    });
+
+    // Local File Handling
+    localFileInput.addEventListener('change', () => {
+      playLocalBtn.disabled = !localFileInput.files.length;
+    });
+
+    playLocalBtn.addEventListener('click', () => {
+      if (!localFileInput.files.length) {
+        alert('Please select a file first');
+        return;
+      }
+      
+      const file = localFileInput.files[0];
+      const url = URL.createObjectURL(file);
+      
+      loadLocalFile(url, file.name);
+    });
+
+    function loadLocalFile(url, fileName, startTime = 0) {
+      if (localMediaPlayer) {
+        localMediaPlayer.pause();
+        localMediaPlayer = null;
+      }
+      
+      localFilePlayer.innerHTML = '';
+      
+      localMediaPlayer = document.createElement('video');
+      localMediaPlayer.controls = true;
+      localMediaPlayer.className = 'w-full h-full object-contain';
+      localMediaPlayer.src = url;
+      
+      // Set consistent height
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      localMediaPlayer.style.height = `${playerHeight}px`;
+      
+      localFilePlayer.appendChild(localMediaPlayer);
+      localFileFullscreen.classList.remove('hidden');
+      
+      localMediaPlayer.addEventListener('loadedmetadata', () => {
+        duration.textContent = formatTime(localMediaPlayer.duration);
+        enableMediaControls();
+        
+        if (startTime > 0) {
+          localMediaPlayer.currentTime = startTime;
+        }
+      });
+      
+      localMediaPlayer.addEventListener('timeupdate', () => {
+        const progress = (localMediaPlayer.currentTime / localMediaPlayer.duration) * 100;
+        mediaProgress.value = progress;
+        currentTime.textContent = formatTime(localMediaPlayer.currentTime);
+      });
+      
+      localMediaPlayer.addEventListener('play', () => {
+        startMediaSync();
+      });
+      
+      localMediaPlayer.addEventListener('pause', () => {
+        stopMediaSync();
+      });
+      
+      localMediaPlayer.addEventListener('ended', () => {
+        stopMediaSync();
+      });
+      
+      localMediaPlayer.addEventListener('seeked', () => {
+        if (isMediaHost && currentMediaRoom) {
+          socket.emit('media-control', {
+            room: currentMediaRoom,
+            type: 'seek',
+            time: localMediaPlayer.currentTime
+          });
+        }
+      });
+      
+      currentMediaType = 'local-file';
+      enableMediaControls();
+      addMediaChatMessage('System', `Loaded local file: ${fileName}`, 'incoming');
+      
+      if (isMediaHost && currentMediaRoom) {
+        socket.emit('media-control', {
+          room: currentMediaRoom,
+          type: 'load-local-file',
+          mediaType: 'local-file',
+          fileName: fileName,
+          startTime: startTime
+        });
+      }
+    }
+
+    // Media Controls
+    function enableMediaControls() {
+      [playMediaBtn, pauseMediaBtn, stopMediaBtn, syncMediaBtn].forEach(btn => {
+        btn.disabled = false;
+      });
+      mediaProgress.disabled = false;
+    }
+
+    playMediaBtn.addEventListener('click', () => {
+      playMedia();
+    });
+
+    pauseMediaBtn.addEventListener('click', () => {
+      pauseMedia();
+    });
+
+    stopMediaBtn.addEventListener('click', () => {
+      stopMedia();
+    });
+
+    // Enhanced media control functions that work with embed videos
+    function playMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.playVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.play();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.play();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+        case 'embed':
+          // For embed videos, we track state for sync
+          window.embedIsPlaying = true;
+          window.embedLastUpdate = Date.now();
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'play',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Play command sent. Use sync to align timing.', 'incoming');
+          }
+          break;
+      }
+    }
+
+    function pauseMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.pauseVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.pause();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.pause();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+        case 'embed':
+          window.embedIsPlaying = false;
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'pause',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Pause command sent. Use sync to align timing.', 'incoming');
+          }
+          break;
+      }
+    }
+
+    function stopMedia() {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.stopVideo();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'youtube'
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.pause();
+            directUrlMediaPlayer.currentTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'direct-url'
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.pause();
+            localMediaPlayer.currentTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'local-file'
+              });
+            }
+          }
+          break;
+        case 'embed':
+          window.embedIsPlaying = false;
+          window.embedSimulatedTime = 0;
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'stop',
+              mediaType: 'embed'
+            });
+            addMediaChatMessage('System', 'Stop command sent. Use sync to align timing.', 'incoming');
+          }
+          break;
+      }
+    }
+
+    // Update the sync button to also request room state
+    syncMediaBtn.addEventListener('click', () => {
+      if (currentMediaRoom) {
+        socket.emit('get-room-state', currentMediaRoom);
+        addMediaChatMessage('System', 'Requesting current media state from room...', 'incoming');
+      }
+    });
+
+    becomeHostBtn.addEventListener('click', () => {
+      socket.emit('request-host', currentMediaRoom);
+    });
+
+    function syncWithHost() {
+      socket.emit('request-sync', currentMediaRoom);
+    }
+
+    // Enhanced media sync for embed videos
+    function startMediaSync() {
+      if (mediaSyncInterval) {
+        clearInterval(mediaSyncInterval);
+      }
+      
+      mediaSyncInterval = setInterval(() => {
+        if (isMediaHost && currentMediaRoom) {
+          let currentTime = 0;
+          let state = 2; // Default to paused
+          
+          switch (currentMediaType) {
+            case 'youtube':
+              if (youtubePlayerObj) {
+                currentTime = youtubePlayerObj.getCurrentTime();
+                state = youtubePlayerObj.getPlayerState();
+              }
+              break;
+            case 'direct-url':
+              if (directUrlMediaPlayer) {
+                currentTime = directUrlMediaPlayer.currentTime;
+                state = directUrlMediaPlayer.paused ? 2 : 1;
+              }
+              break;
+            case 'local-file':
+              if (localMediaPlayer) {
+                currentTime = localMediaPlayer.currentTime;
+                state = localMediaPlayer.paused ? 2 : 1;
+              }
+              break;
+            case 'embed':
+              // For embed videos, we can't get current time due to cross-origin restrictions
+              // So we'll use a simulated time that increments when playing
+              if (window.embedIsPlaying) {
+                const now = Date.now();
+                const delta = (now - window.embedLastUpdate) / 1000;
+                window.embedSimulatedTime += delta;
+                window.embedLastUpdate = now;
+              }
+              currentTime = window.embedSimulatedTime;
+              state = window.embedIsPlaying ? 1 : 2;
+              break;
+          }
+          
+          socket.emit('media-sync', {
+            room: currentMediaRoom,
+            time: currentTime,
+            state: state,
+            timestamp: Date.now()
+          });
+        }
+      }, 1000);
+    }
+
+    function stopMediaSync() {
+      if (mediaSyncInterval) {
+        clearInterval(mediaSyncInterval);
+        mediaSyncInterval = null;
+      }
+    }
+
+    // Enhanced sync handling for embed videos
+    socket.on('media-sync', (data) => {
+      if (!isMediaHost && data.from !== socket.id) {
+        syncMediaTime(data.time, data.state, data.timestamp);
+      }
+    });
+
+    function syncMediaTime(time, state, timestamp) {
+      const now = Date.now();
+      const latency = (now - timestamp) / 1000;
+      const adjustedTime = time + latency;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const currentTime = youtubePlayerObj.getCurrentTime();
+            if (Math.abs(currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              youtubePlayerObj.seekTo(adjustedTime, true);
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && youtubePlayerObj.getPlayerState() !== YT.PlayerState.PLAYING) {
+              youtubePlayerObj.playVideo();
+            } else if (state === 2 && youtubePlayerObj.getPlayerState() !== YT.PlayerState.PAUSED) {
+              youtubePlayerObj.pauseVideo();
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            if (Math.abs(directUrlMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              directUrlMediaPlayer.currentTime = adjustedTime;
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && directUrlMediaPlayer.paused) {
+              directUrlMediaPlayer.play();
+            } else if (state === 2 && !directUrlMediaPlayer.paused) {
+              directUrlMediaPlayer.pause();
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            if (Math.abs(localMediaPlayer.currentTime - adjustedTime) > SYNC_THRESHOLD) {
+              localMediaPlayer.currentTime = adjustedTime;
+            }
+            
+            // Sync play/pause state
+            if (state === 1 && localMediaPlayer.paused) {
+              localMediaPlayer.play();
+            } else if (state === 2 && !localMediaPlayer.paused) {
+              localMediaPlayer.pause();
+            }
+          }
+          break;
+        case 'embed':
+          // For embed videos, we simulate sync by tracking time locally
+          window.embedSimulatedTime = adjustedTime;
+          window.embedLastUpdate = Date.now();
+          window.embedIsPlaying = state === 1;
+          
+          // Show sync status in chat for embed videos
+          if (Math.abs(window.embedSimulatedTime - adjustedTime) > SYNC_THRESHOLD) {
+            addMediaChatMessage('System', `Video synced to ${formatTime(adjustedTime)}`, 'incoming');
+          }
+          break;
+      }
+    }
+
+    // Socket event handlers for media controls
+    socket.on('media-control', (data) => {
+      console.log('Received media control:', data);
+      
+      if (data.type === 'load-youtube') {
+        loadYouTubeVideo(data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-direct-url') {
+        loadDirectUrlVideo(data.url, data.startTime || 0);
+      } else if (data.type === 'load-embed') {
+        loadEmbedVideo(data.platform, data.videoId, data.startTime || 0);
+      } else if (data.type === 'load-local-file') {
+        addMediaChatMessage('System', `Host loaded local file: ${data.fileName}. You need to load the same file manually.`, 'incoming');
+      } else if (data.type === 'play') {
+        playMedia();
+      } else if (data.type === 'pause') {
+        pauseMedia();
+      } else if (data.type === 'stop') {
+        stopMedia();
+      } else if (data.type === 'seek') {
+        seekMedia(data.time);
+      }
+    });
+
+    socket.on('media-sync-request', (data) => {
+      if (isMediaHost) {
+        let currentTime = 0;
+        
+        switch (currentMediaType) {
+          case 'youtube':
+            if (youtubePlayerObj) {
+              currentTime = youtubePlayerObj.getCurrentTime();
+            }
+            break;
+          case 'direct-url':
+            if (directUrlMediaPlayer) {
+              currentTime = directUrlMediaPlayer.currentTime;
+            }
+            break;
+          case 'local-file':
+            if (localMediaPlayer) {
+              currentTime = localMediaPlayer.currentTime;
+            }
+            break;
+          case 'embed':
+            currentTime = window.embedSimulatedTime;
+            break;
+        }
+        
+        socket.emit('media-sync', {
+          room: currentMediaRoom,
+          time: currentTime,
+          state: window.embedIsPlaying ? 1 : 2,
+          timestamp: Date.now()
+        });
+      }
+    });
+
+    function seekMedia(time) {
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            youtubePlayerObj.seekTo(time, true);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            directUrlMediaPlayer.currentTime = time;
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            localMediaPlayer.currentTime = time;
+          }
+          break;
+        case 'embed':
+          window.embedSimulatedTime = time;
+          addMediaChatMessage('System', `Seeked to ${formatTime(time)}`, 'incoming');
+          break;
+      }
+    }
+
+    // Media Progress Control
+    mediaProgress.addEventListener('input', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            const newTime = (progress / 100) * duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            const newTime = (progress / 100) * directUrlMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            const newTime = (progress / 100) * localMediaPlayer.duration;
+            currentTime.textContent = formatTime(newTime);
+          }
+          break;
+        case 'embed':
+          const newTime = (progress / 100) * 600; // Assume 10min for embed
+          currentTime.textContent = formatTime(newTime);
+          break;
+      }
+    });
+
+    mediaProgress.addEventListener('change', () => {
+      const progress = mediaProgress.value;
+      
+      switch (currentMediaType) {
+        case 'youtube':
+          if (youtubePlayerObj) {
+            const duration = youtubePlayerObj.getDuration();
+            const newTime = (progress / 100) * duration;
+            youtubePlayerObj.seekTo(newTime, true);
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+        case 'direct-url':
+          if (directUrlMediaPlayer) {
+            const newTime = (progress / 100) * directUrlMediaPlayer.duration;
+            directUrlMediaPlayer.currentTime = newTime;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+        case 'local-file':
+          if (localMediaPlayer) {
+            const newTime = (progress / 100) * localMediaPlayer.duration;
+            localMediaPlayer.currentTime = newTime;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'seek',
+                time: newTime
+              });
+            }
+          }
+          break;
+        case 'embed':
+          const newTime = (progress / 100) * 600; // Assume 10min for embed
+          window.embedSimulatedTime = newTime;
+          if (isMediaHost && currentMediaRoom) {
+            socket.emit('media-control', {
+              room: currentMediaRoom,
+              type: 'seek',
+              time: newTime
+            });
+          }
+          addMediaChatMessage('System', `Seeked to ${formatTime(newTime)}`, 'incoming');
+          break;
+      }
+    });
+
+    // Chat functionality
+    sendMediaChatBtn.addEventListener('click', sendMediaChatMessage);
+
+    mediaChatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMediaChatMessage();
+      }
+    });
+
+    function sendMediaChatMessage() {
+      const message = mediaChatInput.value.trim();
+      if (!message || !currentMediaRoom) return;
+      
+      socket.emit('media-chat-message', {
+        room: currentMediaRoom,
+        message: message,
+        sender: mediaDisplayNameValue
+      });
+      
+      addMediaChatMessage(mediaDisplayNameValue, message, 'outgoing');
+      mediaChatInput.value = '';
+    }
+
+    function addMediaChatMessage(sender, message, type) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `mb-3 ${type === 'outgoing' ? 'text-right' : ''}`;
+      
+      messageDiv.innerHTML = `
+        <div class="inline-block max-w-xs md:max-w-md lg:max-w-lg xl:max-w-xl px-3 md:px-4 py-2 rounded-lg ${
+          type === 'outgoing' 
+            ? 'bg-blue-600 text-white' 
+            : 'bg-gray-600 text-white'
+        }">
+          <div class="font-semibold text-xs md:text-sm ${
+            type === 'outgoing' ? 'text-blue-200' : 'text-gray-300'
+          }">${sender}</div>
+          <div class="mt-1 text-sm md:text-base break-words">${message}</div>
+        </div>
+      `;
+      
+      mediaChatMessages.appendChild(messageDiv);
+      mediaChatMessages.scrollTop = mediaChatMessages.scrollHeight;
+    }
+
+    socket.on('media-chat-message', (data) => {
+      addMediaChatMessage(data.sender, data.message, 'incoming');
+    });
+
+    // Fullscreen functionality
+    directUrlFullscreen.addEventListener('click', () => {
+      if (directUrlPlayer) {
+        if (directUrlPlayer.requestFullscreen) {
+          directUrlPlayer.requestFullscreen();
+        } else if (directUrlPlayer.webkitRequestFullscreen) {
+          directUrlPlayer.webkitRequestFullscreen();
+        } else if (directUrlPlayer.msRequestFullscreen) {
+          directUrlPlayer.msRequestFullscreen();
+        }
+      }
+    });
+
+    localFileFullscreen.addEventListener('click', () => {
+      if (localFilePlayer) {
+        if (localFilePlayer.requestFullscreen) {
+          localFilePlayer.requestFullscreen();
+        } else if (localFilePlayer.webkitRequestFullscreen) {
+          localFilePlayer.webkitRequestFullscreen();
+        } else if (localFilePlayer.msRequestFullscreen) {
+          localFilePlayer.msRequestFullscreen();
+        }
+      }
+    });
+
+    // Utility functions
+    function formatTime(seconds) {
+      if (!seconds || isNaN(seconds)) return '0:00';
+      
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // Handle responsive resizing
+    window.addEventListener('resize', () => {
+      // Update player heights when screen size changes
+      const playerHeight = window.innerWidth < 768 ? 300 : 500;
+      
+      if (youtubePlayerObj && youtubePlayerObj.getPlayerState) {
+        const iframe = document.querySelector('#yt-player iframe');
+        if (iframe) {
+          iframe.style.height = `${playerHeight}px`;
+        }
+      }
+      
+      if (directUrlMediaPlayer) {
+        directUrlMediaPlayer.style.height = `${playerHeight}px`;
+      }
+      
+      if (localMediaPlayer) {
+        localMediaPlayer.style.height = `${playerHeight}px`;
+      }
+      
+      const embedIframe = embedPlayer.querySelector('iframe');
+      if (embedIframe && !embedPlayer.classList.contains('facebook-portrait')) {
+        embedIframe.style.height = `${playerHeight}px`;
+      }
+    });
+
+    // Initialize
+    function initialize() {
+      disableAllControls();
+      updateMediaRoomStatus('disconnected');
+      updateConnectionStatus('disconnected');
+      updateStatusIndicators();
+      
+      // Socket connection status
+      socket.on('connect', () => {
+        updateStatusIndicators();
+      });
+      
+      socket.on('disconnect', () => {
+        updateStatusIndicators();
+      });
+    }
+
+    // Start the application
+    initialize();
+  </script>
+</body>
+</html>
