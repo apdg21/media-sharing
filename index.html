@@ -557,18 +557,18 @@
           <div id="embed-source" class="media-source-content">
             <div class="mb-4 space-y-3">
               <select id="embedPlatform" class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
-                <option value="dailymotion">Dailymotion</option>
-                <option value="vimeo">Vimeo</option>
-                <option value="facebook">Facebook (Reels / Vertical 9:16)</option>
-                <option value="other">Other Platform</option>
+                <option value="vimeo">Vimeo (synced play/pause/seek)</option>
+                <option value="dailymotion">Dailymotion (manual sync)</option>
+                <option value="facebook">Facebook (Reels / Vertical 9:16, manual sync)</option>
+                <option value="other">Other Platform (manual sync)</option>
               </select>
               <input id="embedVideoId" placeholder="Enter video ID or embed URL" 
                      class="w-full p-3 bg-gray-600 border border-gray-500 rounded-lg">
               <div class="text-sm text-gray-400 p-2 bg-gray-800 rounded">
-                <strong>Dailymotion:</strong> Enter video ID (e.g., x8abcde from https://www.dailymotion.com/video/x8abcde)<br>
-                <strong>Vimeo:</strong> Enter video ID (e.g., 123456789 from https://vimeo.com/123456789)<br>
-                <strong>Facebook:</strong> Paste the full Facebook video/reel URL (e.g., https://www.facebook.com/reel/123456789). Displayed in 9:16 portrait format.<br>
-                <strong>Other:</strong> Paste full embed URL
+                <strong>Vimeo:</strong> Enter video ID (e.g., 123456789 from https://vimeo.com/123456789). Play, pause, and seek are synced for everyone automatically.<br>
+                <strong>Dailymotion:</strong> Enter video ID (e.g., x8abcde from https://www.dailymotion.com/video/x8abcde). Play/pause can't be controlled remotely yet — everyone gets a chat notice with the timestamp and presses play themselves.<br>
+                <strong>Facebook:</strong> Paste the full Facebook video/reel URL (e.g., https://www.facebook.com/reel/123456789). Displayed in 9:16 portrait format. Manual sync only, same as Dailymotion.<br>
+                <strong>Other:</strong> Paste full embed URL. Manual sync only.
               </div>
               <button id="loadEmbedBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-lg font-semibold flex items-center justify-center" disabled>
                 <i class="fas fa-code mr-2"></i> Load Embed Video
@@ -690,6 +690,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="https://player.vimeo.com/api/player.js"></script>
   <script>
     // Socket connection - NO CHANGES HERE
     const socket = io();
@@ -769,9 +770,11 @@
 
     // State variables - NO CHANGES HERE
     let youtubePlayerObj = null;
+    let vimeoPlayerObj = null;
     let localMediaPlayer = null;
     let directUrlMediaPlayer = null;
     let currentMediaType = null;
+    let currentEmbedPlatform = null; // 'vimeo' | 'dailymotion' | 'facebook' | 'other' — which embed sub-type is loaded
     let isMediaHost = false;
     let currentMediaRoom = null;
     let mediaSyncInterval = null;
@@ -784,6 +787,7 @@
     window.embedIsPlaying = false;
     window.embedSimulatedTime = 0;
     window.embedLastUpdate = Date.now();
+    window.embedDuration = 0; // populated from the real player (Vimeo) when available
 
     // ========== NEW: Main Tab Switching ==========
     mainTabs.forEach(tab => {
@@ -1057,6 +1061,10 @@
         youtubePlayerObj.destroy();
         youtubePlayerObj = null;
       }
+      if (vimeoPlayerObj) {
+        vimeoPlayerObj.destroy().catch(() => {});
+        vimeoPlayerObj = null;
+      }
       if (localMediaPlayer) {
         localMediaPlayer.pause();
         localMediaPlayer = null;
@@ -1069,7 +1077,9 @@
       // Reset embed tracking
       window.embedIsPlaying = false;
       window.embedSimulatedTime = 0;
+      window.embedDuration = 0;
       currentMediaType = null;
+      currentEmbedPlatform = null;
       
       // Reset players
       resetAllPlayers();
@@ -1516,19 +1526,32 @@
       }
     }
 
-    // Enhanced embed video loading with better sync
+    // Enhanced embed video loading with better sync.
+    // Vimeo gets a real, controllable player via the official player.js SDK.
+    // Dailymotion and Facebook need an account-specific Player ID / App ID
+    // before they can be driven the same way — see setupDailymotionPlayer()
+    // and setupFacebookPlayer() below for what's needed to upgrade those.
     function loadEmbedVideo(platform, videoId, startTime = 0) {
       let embedUrl = '';
       let displayName = '';
       const isFacebook = platform === 'facebook';
-      
+      const isVimeo = platform === 'vimeo';
+
+      // Tear down any previous real player object before loading a new one
+      if (vimeoPlayerObj) {
+        vimeoPlayerObj.destroy().catch(() => {});
+        vimeoPlayerObj = null;
+      }
+
       switch (platform) {
         case 'dailymotion':
           embedUrl = `https://geo.dailymotion.com/player.html?video=${videoId}&api=postMessage&autoplay=1&mute=0`;
           displayName = 'Dailymotion';
           break;
         case 'vimeo':
-          embedUrl = `https://player.vimeo.com/video/${videoId}?autoplay=1`;
+          // api=1 + player_id enables the postMessage-based Player API that
+          // player.js wraps; without these params the iframe can't be controlled.
+          embedUrl = `https://player.vimeo.com/video/${videoId}?api=1&player_id=vimeo-embed-player&autoplay=1`;
           displayName = 'Vimeo';
           break;
         case 'facebook':
@@ -1549,7 +1572,8 @@
         embedPlayer.classList.remove('facebook-portrait');
       }
 
-      embedPlayer.innerHTML = `<iframe src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
+      const iframeId = isVimeo ? ' id="vimeo-embed-player"' : '';
+      embedPlayer.innerHTML = `<iframe${iframeId} src="${embedUrl}" allow="autoplay; fullscreen" allowfullscreen></iframe>`;
       
       // Set consistent height (skip for Facebook which uses aspect-ratio CSS)
       if (!isFacebook) {
@@ -1561,20 +1585,55 @@
       }
       
       currentMediaType = 'embed';
+      currentEmbedPlatform = platform;
       enableMediaControls();
       addMediaChatMessage('System', `Loaded ${displayName} video`, 'incoming');
       
-      // Reset embed tracking
+      // Reset embed tracking (used as the fallback clock for platforms without
+      // a real player object, and as the initial position for Vimeo until its
+      // player reports in)
       window.embedSimulatedTime = startTime || 0;
       window.embedLastUpdate = Date.now();
       window.embedIsPlaying = false;
-      
-      // Start sync after a short delay to let the embed load
-      setTimeout(() => {
-        if (isMediaHost) {
-          startMediaSync();
-        }
-      }, 2000);
+
+      if (isVimeo && window.Vimeo) {
+        const iframe = embedPlayer.querySelector('iframe');
+        vimeoPlayerObj = new Vimeo.Player(iframe);
+        vimeoPlayerObj.ready().then(() => {
+          if (startTime > 0) {
+            vimeoPlayerObj.setCurrentTime(startTime).catch(() => {});
+          }
+          vimeoPlayerObj.getDuration().then(d => {
+            window.embedDuration = d;
+            duration.textContent = formatTime(d);
+          }).catch(() => {});
+        }).catch((err) => {
+          console.warn('Vimeo player failed to initialize:', err);
+          addMediaChatMessage('System', 'Could not connect to the Vimeo player API for this video — it may be private or restrict embedding.', 'incoming');
+        });
+        vimeoPlayerObj.on('play', () => { window.embedIsPlaying = true; if (isMediaHost) startMediaSync(); });
+        vimeoPlayerObj.on('pause', () => { window.embedIsPlaying = false; });
+        vimeoPlayerObj.on('timeupdate', (data) => {
+          window.embedSimulatedTime = data.seconds;
+          if (data.duration) {
+            window.embedDuration = data.duration;
+            const progress = (data.seconds / data.duration) * 100;
+            mediaProgress.value = progress;
+            currentTime.textContent = formatTime(data.seconds);
+            duration.textContent = formatTime(data.duration);
+          }
+        });
+      } else {
+        window.embedDuration = 0;
+        // Start the simulated-clock sync loop after a short delay to let the
+        // embed load — this is the manual-sync fallback for platforms that
+        // don't yet have a real player object wired up.
+        setTimeout(() => {
+          if (isMediaHost) {
+            startMediaSync();
+          }
+        }, 2000);
+      }
       
       if (isMediaHost && currentMediaRoom) {
         socket.emit('media-control', {
@@ -1704,10 +1763,26 @@
       updateMediaControlsHint();
     }
 
+    // Platforms whose embed gives us a real, controllable player object —
+    // Play/Pause/Stop actually drive playback for everyone. Anything else
+    // (Dailymotion without a Pro Player ID, Facebook without an App ID, or an
+    // arbitrary "Other" embed) can only be coordinated by chat, since there's
+    // no API access into that iframe.
+    const REMOTE_CONTROLLABLE_TYPES = new Set(['youtube', 'direct-url', 'local-file']);
+
+    function isCurrentMediaRemoteControllable() {
+      if (currentMediaType === 'embed') {
+        return currentEmbedPlatform === 'vimeo';
+      }
+      return REMOTE_CONTROLLABLE_TYPES.has(currentMediaType);
+    }
+
     function updateMediaControlsHint() {
       if (!mediaControlsHint) return;
       if (!currentMediaType) {
         mediaControlsHint.textContent = 'Load a video, then become the host to control playback for everyone.';
+      } else if (!isCurrentMediaRemoteControllable()) {
+        mediaControlsHint.textContent = "This platform can't be remotely controlled — Play/Pause/Stop only affect your own view. Coordinate timing with everyone over chat instead.";
       } else if (isMediaHost) {
         mediaControlsHint.textContent = "You're the host — Play, Pause, and Stop control playback for everyone in the room.";
       } else {
@@ -1801,22 +1876,42 @@
           }
           break;
         case 'embed':
-          // For embed videos we can't seek programmatically (cross-origin iframe),
-          // so we just align our local simulated clock to the broadcast time.
-          if (typeof time === 'number') {
-            window.embedSimulatedTime = time;
-          }
-          window.embedIsPlaying = true;
-          window.embedLastUpdate = Date.now();
-          if (isMediaHost && currentMediaRoom) {
-            socket.emit('media-control', {
-              room: currentMediaRoom,
-              type: 'play',
-              mediaType: 'embed',
-              time: window.embedSimulatedTime
-            });
+          if (vimeoPlayerObj) {
+            // Real control via the Vimeo Player API
+            const applyVimeoPlay = () => {
+              vimeoPlayerObj.play().catch(() => {});
+            };
+            if (typeof time === 'number') {
+              vimeoPlayerObj.setCurrentTime(time).then(applyVimeoPlay).catch(applyVimeoPlay);
+            } else {
+              applyVimeoPlay();
+            }
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'embed',
+                time: time
+              });
+            }
           } else {
-            addMediaChatMessage('System', `Host pressed Play at ${formatTime(time || 0)}. Press play on your embedded video to match.`, 'incoming');
+            // No real player object for this platform yet — fall back to a
+            // simulated clock and ask the person to press play manually.
+            if (typeof time === 'number') {
+              window.embedSimulatedTime = time;
+            }
+            window.embedIsPlaying = true;
+            window.embedLastUpdate = Date.now();
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'play',
+                mediaType: 'embed',
+                time: window.embedSimulatedTime
+              });
+            } else {
+              addMediaChatMessage('System', `Host pressed Play at ${formatTime(time || 0)}. Press play on your embedded video to match.`, 'incoming');
+            }
           }
           break;
       }
@@ -1876,19 +1971,34 @@
           }
           break;
         case 'embed':
-          window.embedIsPlaying = false;
-          if (typeof time === 'number') {
-            window.embedSimulatedTime = time;
-          }
-          if (isMediaHost && currentMediaRoom) {
-            socket.emit('media-control', {
-              room: currentMediaRoom,
-              type: 'pause',
-              mediaType: 'embed',
-              time: window.embedSimulatedTime
-            });
+          if (vimeoPlayerObj) {
+            vimeoPlayerObj.pause().catch(() => {});
+            if (typeof time === 'number') {
+              vimeoPlayerObj.setCurrentTime(time).catch(() => {});
+            }
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'embed',
+                time: time
+              });
+            }
           } else {
-            addMediaChatMessage('System', `Host paused at ${formatTime(time || 0)}. Pause your embedded video to match.`, 'incoming');
+            window.embedIsPlaying = false;
+            if (typeof time === 'number') {
+              window.embedSimulatedTime = time;
+            }
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'pause',
+                mediaType: 'embed',
+                time: window.embedSimulatedTime
+              });
+            } else {
+              addMediaChatMessage('System', `Host paused at ${formatTime(time || 0)}. Pause your embedded video to match.`, 'incoming');
+            }
           }
           break;
       }
@@ -1938,16 +2048,29 @@
           }
           break;
         case 'embed':
-          window.embedIsPlaying = false;
-          window.embedSimulatedTime = 0;
-          if (isMediaHost && currentMediaRoom) {
-            socket.emit('media-control', {
-              room: currentMediaRoom,
-              type: 'stop',
-              mediaType: 'embed'
-            });
+          if (vimeoPlayerObj) {
+            vimeoPlayerObj.pause().catch(() => {});
+            vimeoPlayerObj.setCurrentTime(0).catch(() => {});
+            window.embedSimulatedTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'embed'
+              });
+            }
           } else {
-            addMediaChatMessage('System', 'Host stopped playback. Stop your embedded video to match.', 'incoming');
+            window.embedIsPlaying = false;
+            window.embedSimulatedTime = 0;
+            if (isMediaHost && currentMediaRoom) {
+              socket.emit('media-control', {
+                room: currentMediaRoom,
+                type: 'stop',
+                mediaType: 'embed'
+              });
+            } else {
+              addMediaChatMessage('System', 'Host stopped playback. Stop your embedded video to match.', 'incoming');
+            }
           }
           break;
       }
@@ -2095,14 +2218,32 @@
           }
           break;
         case 'embed':
-          // For embed videos, we simulate sync by tracking time locally
-          window.embedSimulatedTime = adjustedTime;
-          window.embedLastUpdate = Date.now();
-          window.embedIsPlaying = state === 1;
-          
-          // Show sync status in chat for embed videos
-          if (Math.abs(window.embedSimulatedTime - adjustedTime) > SYNC_THRESHOLD) {
-            addMediaChatMessage('System', `Video synced to ${formatTime(adjustedTime)}`, 'incoming');
+          if (vimeoPlayerObj) {
+            // Real sync via the Vimeo Player API: only correct drift past the
+            // threshold so we're not constantly fighting the player with
+            // micro-seeks, then match play/pause state.
+            vimeoPlayerObj.getCurrentTime().then((current) => {
+              if (Math.abs(current - adjustedTime) > SYNC_THRESHOLD) {
+                vimeoPlayerObj.setCurrentTime(adjustedTime).catch(() => {});
+                addMediaChatMessage('System', `Video synced to ${formatTime(adjustedTime)}`, 'incoming');
+              }
+            }).catch(() => {});
+            if (state === 1) {
+              vimeoPlayerObj.play().catch(() => {});
+            } else if (state === 2) {
+              vimeoPlayerObj.pause().catch(() => {});
+            }
+          } else {
+            // No real player object for this platform — fall back to tracking
+            // a simulated clock and let the person know where the host is.
+            const wasOffBy = Math.abs(window.embedSimulatedTime - adjustedTime);
+            window.embedSimulatedTime = adjustedTime;
+            window.embedLastUpdate = Date.now();
+            window.embedIsPlaying = state === 1;
+
+            if (wasOffBy > SYNC_THRESHOLD) {
+              addMediaChatMessage('System', `Host is at ${formatTime(adjustedTime)} — adjust your embedded video to match.`, 'incoming');
+            }
           }
           break;
       }
@@ -2193,8 +2334,12 @@
           }
           break;
         case 'embed':
-          window.embedSimulatedTime = time;
-          addMediaChatMessage('System', `Seeked to ${formatTime(time)}`, 'incoming');
+          if (vimeoPlayerObj) {
+            vimeoPlayerObj.setCurrentTime(time).catch(() => {});
+          } else {
+            window.embedSimulatedTime = time;
+            addMediaChatMessage('System', `Host seeked to ${formatTime(time)} — adjust your embedded video to match.`, 'incoming');
+          }
           break;
       }
     }
@@ -2223,10 +2368,12 @@
             currentTime.textContent = formatTime(newTime);
           }
           break;
-        case 'embed':
-          const newTime = (progress / 100) * 600; // Assume 10min for embed
+        case 'embed': {
+          const embedDur = window.embedDuration || 600; // fall back only if duration is genuinely unknown
+          const newTime = (progress / 100) * embedDur;
           currentTime.textContent = formatTime(newTime);
           break;
+        }
       }
     });
 
@@ -2274,9 +2421,14 @@
             }
           }
           break;
-        case 'embed':
-          const newTime = (progress / 100) * 600; // Assume 10min for embed
-          window.embedSimulatedTime = newTime;
+        case 'embed': {
+          const embedDur = window.embedDuration || 600; // fall back only if duration is genuinely unknown
+          const newTime = (progress / 100) * embedDur;
+          if (vimeoPlayerObj) {
+            vimeoPlayerObj.setCurrentTime(newTime).catch(() => {});
+          } else {
+            window.embedSimulatedTime = newTime;
+          }
           if (isMediaHost && currentMediaRoom) {
             socket.emit('media-control', {
               room: currentMediaRoom,
@@ -2284,8 +2436,11 @@
               time: newTime
             });
           }
-          addMediaChatMessage('System', `Seeked to ${formatTime(newTime)}`, 'incoming');
+          if (!vimeoPlayerObj) {
+            addMediaChatMessage('System', `Seeked to ${formatTime(newTime)} — adjust your embedded video to match.`, 'incoming');
+          }
           break;
+        }
       }
     });
 
