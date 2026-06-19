@@ -818,12 +818,18 @@
       }
       
       // Room status
+      // leaveMediaBtn is derived directly from currentMediaRoom here as a
+      // single source of truth, rather than relying on every "joined/created
+      // a room" handler to remember to re-enable it individually — that's
+      // what let it get stuck disabled after a leave-then-rejoin before.
       if (currentMediaRoom) {
         roomStatusIndicator.className = 'h-3 w-3 rounded-full bg-green-500 mr-2';
         roomConnIndicatorText.textContent = `In room: ${currentMediaRoom}`;
+        leaveMediaBtn.disabled = false;
       } else {
         roomStatusIndicator.className = 'h-3 w-3 rounded-full bg-red-500 mr-2';
         roomConnIndicatorText.textContent = 'Not in a room';
+        leaveMediaBtn.disabled = true;
       }
       
       // Host status
@@ -935,7 +941,7 @@
       updateMediaParticipants();
       
       // Enable media controls
-      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn, leaveMediaBtn].forEach(btn => {
         btn.disabled = false;
       });
       
@@ -1101,14 +1107,15 @@
       // Disable all controls
       disableAllControls();
       
-      leaveMediaBtn.disabled = true;
-      
-      updateMediaRoomStatus('disconnected');
-      updateConnectionStatus('disconnected');
+      // Reset state before the status-update calls below, so
+      // updateStatusIndicators() (called inside both of them) always sees
+      // the post-leave state rather than racing against it.
       currentMediaRoom = null;
       isMediaHost = false;
       mediaRoomUsers.clear();
-      updateStatusIndicators();
+      
+      updateMediaRoomStatus('disconnected');
+      updateConnectionStatus('disconnected');
     }
 
     function resetAllPlayers() {
@@ -1253,7 +1260,11 @@
       }
       
       // Enable media controls
-      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn].forEach(btn => {
+      // leaveMediaBtn must be re-enabled here too: it gets disabled at the end
+      // of leaveMediaRoom(), and without this, leaving a room then joining or
+      // creating another one (without a full page reload) leaves Leave
+      // permanently disabled even though the room UI looks fully active.
+      [loadYoutubeBtn, loadDirectUrlBtn, loadEmbedBtn, playLocalBtn, mediaChatInput, sendMediaChatBtn, leaveMediaBtn].forEach(btn => {
         btn.disabled = false;
       });
       
