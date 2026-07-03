@@ -688,12 +688,12 @@
     </div>
   </main>
 
-  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://media-sharing-mvl8.onrender.com/socket.io/socket.io.js"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <script src="https://player.vimeo.com/api/player.js"></script>
   <script>
     // Socket connection - NO CHANGES HERE
-    const socket = io();
+    const socket = io('https://media-sharing-mvl8.onrender.com');
 
     // DOM Elements - Keep all your existing element references
     const mediaRoomName = document.getElementById('mediaRoomName');
